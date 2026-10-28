@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { Customer, CustomerLedgerEntry } from '../../../shared/types';
+import { ICustomerRepository } from '../../../shared/interfaces/repositories/ICustomerRepository';
 
-export class CustomerRepository {
+export class CustomerRepository implements ICustomerRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public list(): Customer[] {

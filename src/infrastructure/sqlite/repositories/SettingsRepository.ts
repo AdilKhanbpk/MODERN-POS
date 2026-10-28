@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { SystemSettings } from '../../../shared/types';
+import { ISettingsRepository } from '../../../shared/interfaces/repositories/ISettingsRepository';
 
-export class SettingsRepository {
+export class SettingsRepository implements ISettingsRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public getSettings(): SystemSettings {
@@ -35,5 +36,13 @@ export class SettingsRepository {
       stmt.run(k, String(v));
     }
   }
-}
 
+  public getAppSetting(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM system_settings WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  }
+
+  public setAppSetting(key: string, value: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)').run(key, value);
+  }
+}

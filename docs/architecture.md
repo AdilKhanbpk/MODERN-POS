@@ -2,203 +2,181 @@
 
 ## 1. Executive Summary & Design Principles
 
-The **Modern Retail POS** is an enterprise-grade desktop point-of-sale system engineered for **100% offline, local-first retail operations**. No internet connection, cloud infrastructure, or external telemetry is required for any operation including authentication, barcode scanning, sales, stock adjustments, financial reporting, thermal receipt printing, or database backups.
+The **Modern Retail POS** is an enterprise-grade desktop point-of-sale system engineered for **100% offline, local-first retail operations**, with built-in multi-mode support for multi-counter local servers and multi-branch central PostgreSQL servers.
+
+No internet connection, cloud infrastructure, or external telemetry is required for standalone retail operation including authentication, barcode scanning, sales, stock adjustments, financial reporting, thermal receipt printing, or database backups.
 
 ### Architectural Invariants:
-1. **Separation of Concerns**: Each architectural layer strictly executes its designated responsibilities.
-2. **Deterministic Calculation Truth**: React components never calculate stock levels, profit margins, or customer balances as final source of truth. All calculations are executed exclusively by the shared backend Domain Layer.
-3. **Double-Entry Integrity**: Every financial transaction (sale, purchase, customer payment, expense, payroll) posts balanced debit and credit entries to the general ledger (`sum(Debits) === sum(Credits)`).
-4. **Relational Constraints & Atomicity**: SQLite WAL (Write-Ahead Logging) mode with foreign key enforcement (`PRAGMA foreign_keys = ON`) and transactional rollbacks protect inventory and ledger consistency.
-5. **Secure IPC Isolation**: Renderer runs with `contextIsolation: true` and `nodeIntegration: false`. The `window.posApi` object exposes only approved, typed contracts through Electron's `contextBridge`.
+1. **Strict Layered Separation**: Presentation $\rightarrow$ Application $\rightarrow$ Domain $\rightarrow$ Infrastructure / Integration. No layer may skip boundaries or access lower-level primitives directly.
+2. **Deterministic Calculation Truth**: React components never calculate prices, taxes, stock levels, or customer balances as authoritative sources of truth. All calculations are executed exclusively by pure, tested Domain functions.
+3. **No Float for Money**: Monetary amounts are stored and calculated strictly as integer minor units (PKR Paisa / Cents).
+4. **Canonical Fixed-Point Stock Quantities**: Quantities are stored in base units scaled by `QUANTITY_SCALE = 10,000`. Unrepresentable fractions are rejected rather than silently rounded.
+5. **Double-Entry Financial Integrity**: Every financial transaction (sale, purchase, customer payment, expense, payroll) posts balanced debit and credit entries to the general ledger (`sum(Debits) === sum(Credits)`).
+6. **Relational Constraints & Atomicity**: SQLite WAL mode with foreign key enforcement (`PRAGMA foreign_keys = ON`) and transactional rollbacks protect inventory and ledger consistency.
+7. **Secure Electron Isolation**: Renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and strict Content Security Policy. The `window.posApi` object exposes only approved, typed contracts through Electron's `contextBridge`.
+8. **No Live SQLite Over Network Shares**: Multi-user operations use server-managed databases with typed repository interfaces, never placing a live SQLite file on SMB/NFS network folders.
 
 ---
 
-## 2. Complete Layered Architecture
+## 2. Complete 5-Layer System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ELECTRON APPLICATION                         │
+│                    ELECTRON DESKTOP RUNTIME                     │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    REACT + TYPESCRIPT                     │  │
+│  │             1. PRESENTATION LAYER (RENDERER)              │  │
 │  │                                                           │  │
-│  │  Dashboard, POS Terminal (F1), Inventory (F2), Purchases,  │  │
-│  │  Customers, Suppliers, Accounts, Expenses, Payroll,       │  │
-│  │  Reports & Daily Z-Report, Settings & Local Backup        │  │
+│  │  React 18 + TypeScript + Modern Component Architecture    │  │
+│  │  Dashboard, POS Terminal (F1), Inventory (F2), Purchases, │  │
+│  │  Customers, Suppliers, Accounts, Expenses, Reports        │  │
 │  └─────────────────────────────┬─────────────────────────────┘  │
 │                                │                                │
 │                     Typed Preload API                           │
 │                     (window.posApi)                             │
 │                                │                                │
 │                     Secure Electron IPC                         │
-│                     (ipcMain / ipcRenderer)                     │
+│                     (ContextBridge, Strict CSP)                 │
 │                                │                                │
 │  ┌─────────────────────────────▼─────────────────────────────┐  │
-│  │               APPLICATION / SERVICE LAYER                 │  │
+│  │                2. APPLICATION LAYER                       │  │
 │  │                                                           │  │
-│  │  AuthService, SalesService, PurchaseService,              │  │
-│  │  InventoryService, AccountService, ExpenseService,        │  │
-│  │  PayrollService, ReportService, BackupService,            │  │
-│  │  SettingsService, RBAC Authorization Enforcer             │  │
-│  └─────────────────────────────┬─────────────────────────────┘  │
-│                                │                                │
-│  ┌─────────────────────────────▼─────────────────────────────┐  │
-│  │                      DOMAIN LAYER                         │  │
+│  │  Use Cases, Workflows, RBAC Permissions, Payload Zod      │  │
+│  │  Validation, Idempotency Guard, Orchestration             │  │
+│  └──────────────────────┬──────────────┬─────────────────────┘  │
+│                         │              │                        │
+│  ┌──────────────────────▼──┐        ┌──▼─────────────────────┐  │
+│  │     3. DOMAIN LAYER     │        │  5. INTEGRATION LAYER  │  │
+│  │                         │        │                        │  │
+│  │  Money (Paisa), Units,  │        │  PostgreSQL Adapter,   │  │
+│  │  Rational Conversions,  │        │  Hardware Scale COM,   │  │
+│  │  Pricing, Cash Drawer,  │        │  Branch Sync Engine,   │  │
+│  │  MAC Costing, Ledger    │        │  Outbox CDC Replicator │  │
+│  └──────────────────────┬──┘        └──┬─────────────────────┘  │
+│                         │              │                        │
+│  ┌──────────────────────▼──────────────▼─────────────────────┐  │
+│  │              4. INFRASTRUCTURE LAYER                      │  │
 │  │                                                           │  │
-│  │  Money Arithmetic (Integer Cents), Unit Conversions,      │  │
-│  │  Stock Rules & Shortage Checks, PricingCalculator,        │  │
-│  │  Landed Cost Apportionment, DoubleEntry Balancer,         │  │
-│  │  Profit & Loss Analysis                                   │  │
-│  └─────────────────────────────┬─────────────────────────────┘  │
-│                                │                                │
-│  ┌─────────────────────────────▼─────────────────────────────┐  │
-│  │               REPOSITORY / DATABASE LAYER                 │  │
-│  │                                                           │  │
-│  │  UserRepository, ProductRepository, CustomerRepository,  │  │
-│  │  SupplierRepository, SaleRepository, PurchaseRepository, │  │
-│  │  AccountRepository, ExpenseRepository, EmployeeRepo,     │  │
-│  │  TransactionsRunner, Versioned Schema Migrations          │  │
+│  │  Repository Interfaces (IProductRepo, ISaleRepo, etc.)    │  │
+│  │  SQLite WAL Repositories, Versioned Migrations,           │  │
+│  │  Thermal Printer (ESC/POS), Structured Local Logger       │  │
 │  └─────────────────────────────┬─────────────────────────────┘  │
 └────────────────────────────────┼────────────────────────────────┘
                                  │
-                         ┌───────▼───────┐
-                         │    SQLite     │
-                         │ Local Database│
-                         │  (WAL Mode)   │
-                         └───────────────┘
+                   ┌─────────────┴─────────────┐
+                   │                           │
+           ┌───────▼───────┐           ┌───────▼───────┐
+           │ Local SQLite  │           │  PostgreSQL   │
+           │ (Single-User) │           │ (Multi-Branch)│
+           └───────────────┘           └───────────────┘
 ```
 
 ---
 
 ## 3. Layer Responsibilities & Boundaries
 
-### 3.1. Frontend: React + TypeScript
-- **Location**: `src/renderer/`
-- **Role**: Pure UI presentation, cashier interactions, keyboard shortcut listeners (F1-F4), and reactive state rendering.
-- **Rules**:
-  - Never performs final price or profit calculations. Requests domain calculation previews via `window.posApi.sales.calculate(...)`.
-  - Communicates solely through the typed `window.posApi` interface.
+### 3.1. Presentation Layer (`src/renderer/`)
+- Pure React/TypeScript UI for cashiers, store managers, and accountants.
+- Responsive keyboard shortcuts (F1 POS, F2 Inventory, F3 Sales History, F4 Customers).
+- **Boundary Invariant**: Zero direct database or filesystem access. All data fetches and commands flow through `window.posApi`.
 
-### 3.2. Secure Preload API
-- **Location**: `electron/preload/index.ts`
-- **Role**: ContextBridge gateway exposing strictly typed methods grouped by domain (`auth`, `sales`, `inventory`, `customers`, `suppliers`, `accounts`, `reports`, `printing`, `backup`).
-- **Rules**:
-  - No Node.js runtime primitives or raw SQLite bindings are exposed to the browser window.
-  - Channels are defined in `src/shared/contracts/ipc-channels.ts`.
+### 3.2. Application Layer (`src/application/`)
+- Encapsulates system use cases and business workflows.
+- Enforces role-based permissions (`RBACEnforcer`), validates incoming IPC payloads with Zod schemas, manages idempotency keys, and orchestrates atomic multi-repository updates.
 
-### 3.3. Application / Service Layer
-- **Location**: `src/application/`
-- **Role**: Orchestrates workflows, verifies user authorization (RBAC), validates payload schemas with Zod, invokes Domain calculations, coordinates atomic multi-repository writes, and posts general ledger entries.
-
-### 3.4. Domain Layer
-- **Location**: `src/domain/`
-- **Role**: Encapsulates pure business logic and mathematical rules with zero side effects.
+### 3.3. Domain Layer (`src/domain/`)
+- Contains pure, dependency-free business logic and calculation rules.
 - **Submodules**:
-  - `money/money.ts`: Integer cents arithmetic, formatting, safe rounding.
-  - `units/units.ts`: Multi-unit pack/carton conversion factors.
-  - `inventory/stock-rules.ts`: Availability validation, negative stock prevention, reorder levels.
-  - `sales/pricing-calculator.ts`: Deterministic calculation of subtotals, inclusive/exclusive tax, discounts, profit, and payment split.
-  - `purchases/landed-cost.ts`: Apportionment of freight and duties proportionally across goods.
-  - `accounting/double-entry.ts`: Debit/credit balance validation, ledger posting generator, account balance updates.
-  - `costing/profit-calculator.ts`: Gross profit, net profit, margin calculations.
+  - `money/money.ts`: Integer minor units (paisa), currency formatting, precision enforcement.
+  - `units/scaled-quantity.ts`: Fixed-point `QUANTITY_SCALE = 10,000`, unit precision enforcement.
+  - `units/rational-conversion.ts`: Exact numerator/denominator conversions for packs, dozens, gross, and mass.
+  - `sales/pricing-calculator.ts`: Single authoritative line formula, allocated bill discounts, tax inclusive/exclusive, immutable line snapshots.
+  - `accounting/customer-statement.ts`: Chronological running balance calculation, open bill linking.
+  - `accounting/cash-drawer.ts`: Cash register closing formula with strict non-cash separation.
+  - `costing/moving-average.ts`: Moving weighted-average cost (MAC), gross vs. operating profit reports.
+  - `configuration/business-config.ts`: Universal business configuration and profile presets.
 
-### 3.5. Infrastructure / Repository Layer
-- **Location**: `src/infrastructure/sqlite/`
-- **Role**: Handles raw database access, atomic transaction blocks (`TransactionRunner`), schema migrations, and optimized SQL queries.
-- **SQLite Engine Configuration**:
-  - `PRAGMA journal_mode = WAL`: Write-Ahead Logging allows concurrent readers while a write is occurring.
-  - `PRAGMA foreign_keys = ON`: Strict relational constraints prevent orphaned records.
-  - `PRAGMA busy_timeout = 5000`: Graceful handling of lock contention.
+### 3.4. Infrastructure Layer (`src/infrastructure/`)
+- Implements repository interfaces for SQLite (`src/infrastructure/sqlite/repositories/`).
+- Manages database connection, WAL mode, foreign key enforcement, and versioned migrations (`migration-runner.ts`).
+- Provides thermal printing service (`electron/main/printing/`) and structured local logger (`src/infrastructure/logging/`).
 
----
-
-## 4. End-to-End POS Sale Transaction Workflow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Cashier
-    participant UI as React UI (Renderer)
-    participant Preload as Typed Preload (window.posApi)
-    participant Service as SalesService
-    participant Domain as Domain: PricingCalculator
-    participant Rules as Domain: StockRules
-    participant DB as SQLite Transaction
-    participant Ledger as Domain: DoubleEntryLedger
-    participant Printer as ThermalPrinterService
-
-    Cashier->>UI: Scans Barcode / Enters Items
-    UI->>Preload: sales.calculate(items, discount)
-    Preload->>Service: IPC: 'sales:calculate'
-    Service->>Domain: calculateSale(items)
-    Domain-->>Service: Calculation Result
-    Service-->>UI: Real-time Price Preview
-    Cashier->>UI: Selects Customer & Tenders Payment
-    UI->>Preload: sales.createSale(request)
-    Preload->>Service: IPC: 'sales:create'
-    Service->>Domain: calculateSale(items)
-    Service->>Rules: validateAvailability(stock, qty)
-    alt Insufficient Stock
-        Rules-->>Service: Shortage Error
-        Service-->>UI: Reject with Shortage Notice
-    else Stock Available
-        Service->>DB: Begin Atomic Transaction
-        DB->>DB: Deduct Product Inventory & Log Movement
-        DB->>DB: Insert Sale & Line Items
-        DB->>DB: Update Customer Credit Balance & Ledger
-        Service->>Ledger: Generate Balanced Journal Lines
-        DB->>DB: Post Journal Entry (Debits === Credits)
-        DB->>DB: Update Chart of Accounts Balances
-        DB->>DB: Commit Transaction
-        Service-->>UI: Return Completed Sale (Invoice #)
-        Service->>Printer: Silent Print Thermal Receipt (80mm)
-        UI-->>Cashier: Display Success & Change Due
-    end
+### 3.5. Integration Layer (`src/integration/`)
+- **PostgreSQL Adapter (`src/integration/postgres/`)**: Connects multi-counter LAN servers or central enterprise databases using identical repository interfaces.
+- **Hardware Integrations (`src/integration/hardware/`)**: Serial RS-232 / USB scale communication for retail weighing.
+- **Branch Synchronization (`src/integration/sync/`)**: Outbox CDC change replication between offline branches and central server.
 
 ---
 
-## 5. Implementation Specifications & Operations
+## 4. Operational Modes & Database Topology
 
-### 5.1. Responsibility of Every Architectural Layer
-1. **Presentation Layer (`src/renderer/`)**: Pure React/TypeScript UI for cashiers and managers. Has no direct filesystem, database, or network access. All operations dispatch via typed preload API.
-2. **Preload Gateway (`electron/preload/index.ts`)**: Exposes safe, typed methods via `contextBridge.exposeInMainWorld('posApi', ...)`. Strictly enforces `contextIsolation: true` and `nodeIntegration: false`.
-3. **IPC Transport (`electron/main/ipc/`)**: Inter-process communication routing requests from renderer to application services.
-4. **Application / Service Layer (`src/application/`)**: Coordinates use cases, enforces RBAC permissions, coordinates atomic database operations, and orchestrates workflows (sales, purchases, registers, backups).
-5. **Domain Layer (`src/domain/`)**: Pure deterministic business functions with zero external dependencies (Money, Scaled Quantities, Rational Unit Conversions, Authoritative Line Pricing, Cash Drawer Reconciliation, MAC Costing, and Double-Entry Ledger Balancers).
-6. **Infrastructure / Repository Layer (`src/infrastructure/sqlite/`)**: Direct database access with SQLite WAL mode, parameterized SQL, transaction runner, and versioned schema migrations.
+The application supports four distinct operating topologies without rewriting business logic:
 
-### 5.2. How React Communicates with Backend Services
-- React invokes methods on `window.posApi` (e.g. `window.posApi.sales.createSale(payload)`).
-- Preload wraps this in `ipcRenderer.invoke(IPC_CHANNELS.SALES.CREATE, payload)`.
-- Main process handler in `electron/main/ipc/register-handlers.ts` intercepts the channel, passes the request to `SalesService.createSale()`, and returns the typed response or error.
+1. **Mode 1: Single-Computer Offline (Default)**
+   - Engine: SQLite with Write-Ahead Logging (`WAL`) mode.
+   - Storage: Local SSD (`data/pos-database.sqlite` or `%APPDATA%/Modern Retail POS/data/`).
+   - Network: Completely standalone; zero internet or LAN required.
 
-### 5.3. Where the SQLite Database is Stored
-- **Development & Portable Mode**: Stored locally in `<project_root>/data/pos-database.sqlite`.
-- **Installed Windows Desktop Mode**: Stored in `%APPDATA%/Modern Retail POS/data/pos-database.sqlite`.
-- Uses SQLite Write-Ahead Logging (`WAL`), `PRAGMA foreign_keys = ON`, and `PRAGMA busy_timeout = 5000`.
+2. **Mode 2: Local LAN Multi-Counter Server**
+   - Main counter runs the POS application with a local server process.
+   - Secondary cash registers connect via local LAN HTTP/WebSocket API.
+   - **Architectural Invariant**: Never place a live SQLite database file on an SMB, NFS, or mapped network folder. Shared disk access causes lock corruption. Multi-writer setups always use a dedicated server process.
 
-### 5.4. How Migrations Are Executed
-- Managed by `migration-runner.ts` in `src/infrastructure/sqlite/migrations/`.
-- Queries the `schema_migrations` table for the latest applied migration version.
-- Executes unapplied versioned migrations sequentially (`001_initial_schema`, `002_enterprise_schema`, `003_part3_scale_snapshots`) inside atomic SQLite transactions.
+3. **Mode 3: Multi-Branch Central PostgreSQL Server**
+   - Each retail branch operates with its local database for 100% offline survivability during internet outages.
+   - Changes are queued via `BranchSyncManager` and replicated to central PostgreSQL when connected.
+   - Central headquarters queries consolidated sales, stock, and ledger data across all branches.
 
-### 5.5. How Business Calculations Are Shared
-- Domain calculators reside in `src/domain/` as pure TypeScript functions and classes.
-- Used identically by backend application services (to validate and commit authoritative numbers) and accessible to renderer for real-time pricing and tax previews without duplicating code.
+4. **Mode 4: Optional Cloud Services**
+   - Cloud backup snapshots, automated email/SMS receipt dispatch, and consolidated analytics.
+   - Completely optional: Disabling cloud services has zero impact on local operations.
 
-### 5.6. How Windows Packaging Works
-- Configured via `electron-builder` in `package.json` (`npm run package:win`).
-- Compiles Node backend (`npm run build:node`) and Vite frontend (`npm run build:renderer`).
-- Packages native binaries into:
-  - **NSIS Windows Installer (`.exe`)**: Desktop and Start Menu shortcuts, custom install directory.
-  - **Portable Executable (`.exe`)**: Zero-install standalone desktop runner.
+---
 
-### 5.7. How the Application Runs 100% Without Internet
-- **Local SQLite Engine**: Embedded C-based SQLite database with zero cloud requirements.
-- **Local User Authentication**: Password hashes checked locally with bcrypt.
-- **Offline Thermal Printing**: Direct local USB/COM/LPT thermal receipt printing using ESC/POS and Electron native print.
-- **Local Automated Backups**: SQLite database snapshots saved to local disk or USB drive.
-- **Zero Cloud Dependencies**: The system operates with full functionality when completely disconnected from the internet.
+## 5. Universal Business Configuration System
 
-```
+A single unified application supports multiple retail verticals via modular feature flags (`BusinessModuleFlags`):
 
+| Feature Flag | Grocery / Mart | Pharmacy | Apparel / Boutique | Electronics | Laboratory | General Retail |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `enableWeighingScale` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `enableBatchTracking` | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| `enableExpiryTracking` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `enableFefoSelection` | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `enableVariants` (Size/Color) | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ |
+| `enableSerialTracking` | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `enableWarrantyManagement` | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `enableServiceHistory` | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `enableMultiUnitConversions`| ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `enableCustomerCreditLedger`| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `enablePrescriptionManagement`| ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**Modular Independence Invariant**:
+Disabling an optional feature in the business profile hides its UI controls and prevents new records from being created, but **NEVER** deletes, cascades, or alters historical records already stored in the database.
+
+---
+
+## 6. Security, Error Handling & Logging Strategy
+
+### 6.1. Electron Security Hardening
+- `contextIsolation: true` and `nodeIntegration: false`.
+- Strict Content Security Policy enforced on both HTML meta tags and Electron session headers:
+  `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'`
+- Typed, validated IPC channels in `electron/preload/index.ts`.
+- Backend permission enforcement via `RBACEnforcer.assertPermission(role, permission)` regardless of UI button visibility.
+
+### 6.2. Error Handling Hierarchy
+- Standardized `AppError` hierarchy in `src/shared/errors/`:
+  - `ValidationError` (400)
+  - `UnauthorizedError` (401)
+  - `ForbiddenError` (403)
+  - `NotFoundError` (404)
+  - `InsufficientStockError` (409)
+  - `IdempotencyConflictError` (409)
+  - `BusinessRuleViolationError` (422)
+- Structured error serialization passes clean error codes and user messages across IPC without leaking internal stack traces.
+
+### 6.3. Structured Offline Logging
+- Implemented in `LoggerService` (`src/infrastructure/logging/logger.ts`).
+- Writes structured JSON log entries (`[timestamp] [level] [context]: message meta`) to `logs/pos.log`.
+- Local disk safety: Automatic directory verification and size management.

@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { User } from '../../../shared/types';
 import { Role } from '../../../shared/constants/roles-permissions';
+import { IUserRepository } from '../../../shared/interfaces/repositories/IUserRepository';
 
-export class UserRepository {
+export class UserRepository implements IUserRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public findByUsername(username: string): (User & { passwordHash: string }) | null {
@@ -57,6 +58,12 @@ export class UserRepository {
     this.db.prepare(`
       UPDATE users SET password_hash = ? WHERE id = ?
     `).run(newPasswordHash, id);
+  }
+
+  public updateStatus(id: number, isActive: boolean): void {
+    this.db.prepare(`
+      UPDATE users SET is_active = ? WHERE id = ?
+    `).run(isActive ? 1 : 0, id);
   }
 }
 

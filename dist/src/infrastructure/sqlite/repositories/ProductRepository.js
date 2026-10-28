@@ -146,6 +146,11 @@ class ProductRepository {
       WHERE id = ?
     `).run(product.categoryId, product.brandId || null, product.name, product.sku, product.barcode, cost, price, cost, price, reorder, reorder, product.taxRate, product.isTaxInclusive ? 1 : 0, product.isActive ? 1 : 0, product.id);
     }
+    delete(id) {
+        this.db.prepare(`
+      UPDATE products SET is_active = 0 WHERE id = ?
+    `).run(id);
+    }
     updateStock(productId, newStock) {
         this.db.prepare(`
       UPDATE products SET current_stock = ? WHERE id = ?

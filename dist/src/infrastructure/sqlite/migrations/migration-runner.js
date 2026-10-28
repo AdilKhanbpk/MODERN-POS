@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runMigrations = runMigrations;
+exports.applyMigrationV1 = applyMigrationV1;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const roles_permissions_1 = require("../../../shared/constants/roles-permissions");
 const accounts_1 = require("../../../shared/constants/accounts");

@@ -116,5 +116,21 @@ class StockRepository {
         }
         return adjId;
     }
+    getMovementsForProduct(productId, limit = 50) {
+        const rows = this.db.prepare(`
+      SELECT id, product_id as productId, variant_id as variantId,
+             location_id as locationId, batch_id as batchId, serial_id as serialId,
+             movement_type as movementType, quantity,
+             quantity_base_scaled as quantityBaseScaled,
+             previous_stock as previousStock, new_stock as newStock,
+             source_type as sourceType, source_id as sourceId,
+             reason, user_id as userId, created_at as createdAt
+      FROM stock_movements
+      WHERE product_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(productId, limit);
+        return rows;
+    }
 }
 exports.StockRepository = StockRepository;

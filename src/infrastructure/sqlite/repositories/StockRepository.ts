@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { StockBalance, StockMovement, StockAdjustment, StockAdjustmentLine } from '../../../shared/types';
 import { StockMovementType } from '../../../shared/constants/accounts';
+import { IStockRepository } from '../../../shared/interfaces/repositories/IStockRepository';
 
-export class StockRepository {
+export class StockRepository implements IStockRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   /**
@@ -176,6 +177,24 @@ export class StockRepository {
     }
 
     return adjId;
+  }
+
+  public getMovementsForProduct(productId: number, limit = 50): StockMovement[] {
+    const rows = this.db.prepare(`
+      SELECT id, product_id as productId, variant_id as variantId,
+             location_id as locationId, batch_id as batchId, serial_id as serialId,
+             movement_type as movementType, quantity,
+             quantity_base_scaled as quantityBaseScaled,
+             previous_stock as previousStock, new_stock as newStock,
+             source_type as sourceType, source_id as sourceId,
+             reason, user_id as userId, created_at as createdAt
+      FROM stock_movements
+      WHERE product_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(productId, limit) as any[];
+
+    return rows;
   }
 }
 

@@ -12,27 +12,31 @@ export function applyMigrationV3(db: Database.Database): void {
   const tx = db.transaction(() => {
     // 1. Seed complete retail units from Part 3 specification
     const defaultUnits = [
-      { id: 1, name: 'Piece', symbol: 'pcs', dimension: 'COUNT', scale: 0 },
-      { id: 2, name: 'Pair', symbol: 'pr', dimension: 'COUNT', scale: 0 },
-      { id: 3, name: 'Dozen', symbol: 'doz', dimension: 'COUNT', scale: 0 },
-      { id: 4, name: 'Gross', symbol: 'gr', dimension: 'COUNT', scale: 0 },
-      { id: 5, name: 'Pack', symbol: 'pk', dimension: 'COUNT', scale: 0 },
-      { id: 6, name: 'Box', symbol: 'bx', dimension: 'COUNT', scale: 0 },
-      { id: 7, name: 'Carton', symbol: 'ctn', dimension: 'COUNT', scale: 0 },
-      { id: 8, name: 'Kilogram', symbol: 'kg', dimension: 'WEIGHT', scale: 3 },
-      { id: 9, name: 'Gram', symbol: 'g', dimension: 'WEIGHT', scale: 3 },
-      { id: 10, name: 'Litre', symbol: 'ltr', dimension: 'VOLUME', scale: 3 },
-      { id: 11, name: 'Millilitre', symbol: 'ml', dimension: 'VOLUME', scale: 3 },
-      { id: 12, name: 'Metre', symbol: 'm', dimension: 'LENGTH', scale: 2 },
-      { id: 13, name: 'Centimetre', symbol: 'cm', dimension: 'LENGTH', scale: 1 }
+      { name: 'Piece', symbol: 'pcs', dimension: 'COUNT', scale: 0 },
+      { name: 'Pair', symbol: 'pr', dimension: 'COUNT', scale: 0 },
+      { name: 'Dozen', symbol: 'doz', dimension: 'COUNT', scale: 0 },
+      { name: 'Gross', symbol: 'gr', dimension: 'COUNT', scale: 0 },
+      { name: 'Pack', symbol: 'pk', dimension: 'COUNT', scale: 0 },
+      { name: 'Box', symbol: 'bx', dimension: 'COUNT', scale: 0 },
+      { name: 'Carton', symbol: 'ctn', dimension: 'COUNT', scale: 0 },
+      { name: 'Kilogram', symbol: 'kg', dimension: 'WEIGHT', scale: 3 },
+      { name: 'Gram', symbol: 'g', dimension: 'WEIGHT', scale: 3 },
+      { name: 'Litre', symbol: 'ltr', dimension: 'VOLUME', scale: 3 },
+      { name: 'Millilitre', symbol: 'ml', dimension: 'VOLUME', scale: 3 },
+      { name: 'Metre', symbol: 'm', dimension: 'LENGTH', scale: 2 },
+      { name: 'Centimetre', symbol: 'cm', dimension: 'LENGTH', scale: 1 }
     ];
 
     const insertUnit = db.prepare(`
-      INSERT OR IGNORE INTO units (id, name, symbol, dimension, precision_scale)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO units (name, symbol, dimension, precision_scale)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        symbol = excluded.symbol,
+        dimension = excluded.dimension,
+        precision_scale = excluded.precision_scale
     `);
     for (const u of defaultUnits) {
-      insertUnit.run(u.id, u.name, u.symbol, u.dimension, u.scale);
+      insertUnit.run(u.name, u.symbol, u.dimension, u.scale);
     }
 
     // 2. Add complete historical snapshot columns to sale_lines

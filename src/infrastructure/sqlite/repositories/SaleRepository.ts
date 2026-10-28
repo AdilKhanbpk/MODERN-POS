@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { Sale, SaleItem, SaleLine, SaleReturn } from '../../../shared/types';
 import { SaleStatus } from '../../../shared/constants/accounts';
+import { ISaleRepository } from '../../../shared/interfaces/repositories/ISaleRepository';
 
-export class SaleRepository {
+export class SaleRepository implements ISaleRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public getNextInvoiceNumber(): string {

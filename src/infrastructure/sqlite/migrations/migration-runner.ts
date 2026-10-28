@@ -33,7 +33,7 @@ export function runMigrations(db: Database.Database): void {
   }
 }
 
-function applyMigrationV1(db: Database.Database): void {
+export function applyMigrationV1(db: Database.Database): void {
   const transaction = db.transaction(() => {
     // Users table
     db.exec(`

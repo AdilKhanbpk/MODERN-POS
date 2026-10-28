@@ -35,5 +35,12 @@ class SettingsRepository {
             stmt.run(k, String(v));
         }
     }
+    getAppSetting(key) {
+        const row = this.db.prepare('SELECT value FROM system_settings WHERE key = ?').get(key);
+        return row ? row.value : null;
+    }
+    setAppSetting(key, value) {
+        this.db.prepare('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)').run(key, value);
+    }
 }
 exports.SettingsRepository = SettingsRepository;

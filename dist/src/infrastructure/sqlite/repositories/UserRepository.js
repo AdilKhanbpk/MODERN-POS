@@ -53,5 +53,10 @@ class UserRepository {
       UPDATE users SET password_hash = ? WHERE id = ?
     `).run(newPasswordHash, id);
     }
+    updateStatus(id, isActive) {
+        this.db.prepare(`
+      UPDATE users SET is_active = ? WHERE id = ?
+    `).run(isActive ? 1 : 0, id);
+    }
 }
 exports.UserRepository = UserRepository;

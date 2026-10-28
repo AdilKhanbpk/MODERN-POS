@@ -10,6 +10,17 @@ const path_1 = __importDefault(require("path"));
 let mainWindow = null;
 function createMainWindow() {
     const isDev = process.env.NODE_ENV === 'development' || !process.defaultApp;
+    // Enforce strict Content Security Policy (CSP) across all web requests
+    electron_1.session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+            responseHeaders: {
+                ...details.responseHeaders,
+                'Content-Security-Policy': [
+                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'"
+                ]
+            }
+        });
+    });
     mainWindow = new electron_1.BrowserWindow({
         width: 1280,
         height: 800,

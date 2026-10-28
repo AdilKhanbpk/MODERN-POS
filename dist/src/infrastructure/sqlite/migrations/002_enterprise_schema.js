@@ -87,10 +87,12 @@ function applyMigrationV2(db) {
         dimension TEXT NOT NULL DEFAULT 'COUNT' CHECK(dimension IN ('COUNT', 'WEIGHT', 'VOLUME', 'LENGTH')),
         precision_scale INTEGER NOT NULL DEFAULT 0 CHECK(precision_scale >= 0)
       );
+      INSERT OR IGNORE INTO units (id, name, symbol, dimension, precision_scale) VALUES (1, 'Piece', 'pcs', 'COUNT', 0);
     `);
         // Add enterprise columns to products table if missing
         addColumnIfNotExists(db, 'products', 'brand_id', 'INTEGER REFERENCES brands(id) ON DELETE RESTRICT');
-        addColumnIfNotExists(db, 'products', 'base_unit_id', 'INTEGER REFERENCES units(id) ON DELETE RESTRICT DEFAULT 1');
+        addColumnIfNotExists(db, 'products', 'base_unit_id', 'INTEGER REFERENCES units(id) ON DELETE RESTRICT');
+        db.exec('UPDATE products SET base_unit_id = 1 WHERE base_unit_id IS NULL;');
         addColumnIfNotExists(db, 'products', 'default_cost_minor', 'INTEGER NOT NULL DEFAULT 0');
         addColumnIfNotExists(db, 'products', 'default_sale_price_minor', 'INTEGER NOT NULL DEFAULT 0');
         addColumnIfNotExists(db, 'products', 'reorder_level_scaled', 'REAL NOT NULL DEFAULT 5');
@@ -182,6 +184,9 @@ function applyMigrationV2(db) {
         UNIQUE (location_id, name)
       );
 
+      INSERT OR IGNORE INTO locations (id, name, is_active) VALUES (1, 'Main Retail Store', 1);
+      INSERT OR IGNORE INTO registers (id, location_id, name, is_active) VALUES (1, 1, 'Counter 01 - Cash Register', 1);
+
       CREATE TABLE IF NOT EXISTS stock_balances (
         product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
         variant_id INTEGER NOT NULL DEFAULT 0,
@@ -216,7 +221,8 @@ function applyMigrationV2(db) {
     `);
         // Add variant_id, location_id, batch_id, serial_id to stock_movements if missing
         addColumnIfNotExists(db, 'stock_movements', 'variant_id', 'INTEGER REFERENCES product_variants(id) ON DELETE RESTRICT');
-        addColumnIfNotExists(db, 'stock_movements', 'location_id', 'INTEGER REFERENCES locations(id) ON DELETE RESTRICT DEFAULT 1');
+        addColumnIfNotExists(db, 'stock_movements', 'location_id', 'INTEGER REFERENCES locations(id) ON DELETE RESTRICT');
+        db.exec('UPDATE stock_movements SET location_id = 1 WHERE location_id IS NULL;');
         addColumnIfNotExists(db, 'stock_movements', 'batch_id', 'INTEGER REFERENCES product_batches(id) ON DELETE RESTRICT');
         addColumnIfNotExists(db, 'stock_movements', 'serial_id', 'INTEGER REFERENCES product_serial_numbers(id) ON DELETE RESTRICT');
         addColumnIfNotExists(db, 'stock_movements', 'quantity_base_scaled', 'REAL');
@@ -235,15 +241,17 @@ function applyMigrationV2(db) {
         // -------------------------------------------------------------
         // GROUP D: Customers, Suppliers & Companies
         // -------------------------------------------------------------
-        addColumnIfNotExists(db, 'customers', 'customer_code', "TEXT DEFAULT 'CUST-0001'");
+        addColumnIfNotExists(db, 'customers', 'customer_code', "TEXT");
         addColumnIfNotExists(db, 'customers', 'credit_limit_minor', 'INTEGER NOT NULL DEFAULT 0');
+        db.exec(`UPDATE customers SET customer_code = 'CUST-' || PRINTF('%04d', id) WHERE customer_code IS NULL;`);
         db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_code ON customers(customer_code);`);
         db.exec(`
       UPDATE customers
       SET credit_limit_minor = credit_limit
       WHERE credit_limit_minor = 0 AND credit_limit > 0;
     `);
-        addColumnIfNotExists(db, 'suppliers', 'supplier_code', "TEXT DEFAULT 'SUP-0001'");
+        addColumnIfNotExists(db, 'suppliers', 'supplier_code', "TEXT");
+        db.exec(`UPDATE suppliers SET supplier_code = 'SUP-' || PRINTF('%04d', id) WHERE supplier_code IS NULL;`);
         db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_code ON suppliers(supplier_code);`);
         db.exec(`
       CREATE TABLE IF NOT EXISTS companies (
@@ -285,15 +293,18 @@ function applyMigrationV2(db) {
         // -------------------------------------------------------------
         // GROUP E: Sales, Purchases, Returns & Historical Snapshots
         // -------------------------------------------------------------
-        addColumnIfNotExists(db, 'sales', 'location_id', 'INTEGER REFERENCES locations(id) ON DELETE RESTRICT DEFAULT 1');
-        addColumnIfNotExists(db, 'sales', 'register_id', 'INTEGER REFERENCES registers(id) ON DELETE RESTRICT DEFAULT 1');
+        addColumnIfNotExists(db, 'sales', 'location_id', 'INTEGER REFERENCES locations(id) ON DELETE RESTRICT');
+        db.exec('UPDATE sales SET location_id = 1 WHERE location_id IS NULL;');
+        addColumnIfNotExists(db, 'sales', 'register_id', 'INTEGER REFERENCES registers(id) ON DELETE RESTRICT');
+        db.exec('UPDATE sales SET register_id = 1 WHERE register_id IS NULL;');
         addColumnIfNotExists(db, 'sales', 'subtotal_minor', 'INTEGER');
         addColumnIfNotExists(db, 'sales', 'discount_minor', 'INTEGER DEFAULT 0');
         addColumnIfNotExists(db, 'sales', 'tax_minor', 'INTEGER DEFAULT 0');
         addColumnIfNotExists(db, 'sales', 'total_minor', 'INTEGER');
         addColumnIfNotExists(db, 'sales', 'total_cost_minor', 'INTEGER DEFAULT 0');
         addColumnIfNotExists(db, 'sales', 'profit_minor', 'INTEGER DEFAULT 0');
-        addColumnIfNotExists(db, 'sales', 'created_by', 'INTEGER REFERENCES users(id) ON DELETE RESTRICT DEFAULT 1');
+        addColumnIfNotExists(db, 'sales', 'created_by', 'INTEGER REFERENCES users(id) ON DELETE RESTRICT');
+        db.exec('UPDATE sales SET created_by = cashier_id WHERE created_by IS NULL;');
         db.exec(`
       UPDATE sales
       SET subtotal_minor = subtotal,

@@ -2,6 +2,7 @@ import { Role, Permission } from '../constants/roles-permissions';
 import { PaymentMethod, SaleStatus, StockMovementType, AccountType } from '../constants/accounts';
 
 export { Role, Permission, PaymentMethod, SaleStatus, StockMovementType, AccountType };
+export * from './enterprise-core';
 
 // -------------------------------------------------------------
 // GROUP A: Business Settings, Security & Sequences

@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { Supplier, SupplierLedgerEntry } from '../../../shared/types';
+import { ISupplierRepository } from '../../../shared/interfaces/repositories/ISupplierRepository';
 
-export class SupplierRepository {
+export class SupplierRepository implements ISupplierRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public list(): Supplier[] {

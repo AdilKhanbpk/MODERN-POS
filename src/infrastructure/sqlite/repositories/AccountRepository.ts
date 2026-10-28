@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import { getDatabase } from '../connection';
 import { Account, JournalEntry, JournalEntryLine } from '../../../shared/types';
 import { AccountType } from '../../../shared/constants/accounts';
+import { IAccountRepository } from '../../../shared/interfaces/repositories/IAccountRepository';
 
-export class AccountRepository {
+export class AccountRepository implements IAccountRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public list(): Account[] {

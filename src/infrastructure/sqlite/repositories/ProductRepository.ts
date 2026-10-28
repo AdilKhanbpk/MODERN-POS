@@ -11,8 +11,9 @@ import {
   Unit
 } from '../../../shared/types';
 import { StockMovementType } from '../../../shared/constants/accounts';
+import { IProductRepository } from '../../../shared/interfaces/repositories/IProductRepository';
 
-export class ProductRepository {
+export class ProductRepository implements IProductRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public list(): Product[] {
@@ -206,6 +207,12 @@ export class ProductRepository {
       product.isActive ? 1 : 0,
       product.id
     );
+  }
+
+  public delete(id: number): void {
+    this.db.prepare(`
+      UPDATE products SET is_active = 0 WHERE id = ?
+    `).run(id);
   }
 
   public updateStock(productId: number, newStock: number): void {
