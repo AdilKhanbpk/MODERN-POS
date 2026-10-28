@@ -10,6 +10,7 @@ const roles_permissions_1 = require("../../../shared/constants/roles-permissions
 const accounts_1 = require("../../../shared/constants/accounts");
 const _002_enterprise_schema_1 = require("./002_enterprise_schema");
 const _003_part3_scale_snapshots_1 = require("./003_part3_scale_snapshots");
+const _004_universal_enterprise_structure_1 = require("./004_universal_enterprise_structure");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -30,6 +31,9 @@ function runMigrations(db) {
     }
     if (currentVersion < 3) {
         (0, _003_part3_scale_snapshots_1.applyMigrationV3)(db);
+    }
+    if (currentVersion < 4) {
+        (0, _004_universal_enterprise_structure_1.applyMigrationV4)(db);
     }
 }
 function applyMigrationV1(db) {

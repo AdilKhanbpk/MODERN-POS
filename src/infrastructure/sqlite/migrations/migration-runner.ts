@@ -5,6 +5,7 @@ import { AccountType, StandardAccountCode } from '../../../shared/constants/acco
 
 import { applyMigrationV2 } from './002_enterprise_schema';
 import { applyMigrationV3 } from './003_part3_scale_snapshots';
+import { applyMigrationV4 } from './004_universal_enterprise_structure';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -30,6 +31,10 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 3) {
     applyMigrationV3(db);
+  }
+
+  if (currentVersion < 4) {
+    applyMigrationV4(db);
   }
 }
 

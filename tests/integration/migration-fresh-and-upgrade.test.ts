@@ -28,7 +28,7 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
       name: string;
     }>;
 
-    expect(migrations.map(m => m.version)).toEqual([1, 2, 3]);
+    expect(migrations.map(m => m.version)).toEqual([1, 2, 3, 4]);
 
     // 3. Verify key core tables exist
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;

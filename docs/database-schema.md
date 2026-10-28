@@ -2,15 +2,19 @@
 
 ## 1. Architectural Philosophy & Engine Configuration
 
-The database architecture is designed specifically for **local-first, enterprise offline retail operations** in SQLite.
-Data consistency, auditability, and historical non-repudiation are enforced at the database engine level:
+The database architecture is designed specifically for **local-first, enterprise offline retail operations** in SQLite, with complete structural and relational compatibility for multi-counter local networks and centralized multi-branch PostgreSQL synchronization.
+Data consistency, auditability, multi-tenant isolation, and historical non-repudiation are enforced at the database engine level:
 
 - **Engine Mode**: `PRAGMA journal_mode = WAL;` (Write-Ahead Logging for high-performance concurrent reading without write-blocking).
 - **Relational Integrity**: `PRAGMA foreign_keys = ON;` (Strict constraint checking; cascading deletes are prohibited on posted financial documents).
 - **Durability Pragmas**: `PRAGMA synchronous = NORMAL;`, `PRAGMA busy_timeout = 5000;`.
-- **Monetary Convention**: Currency columns end with `_minor` and store integer minor currency units (cents/paisa).
-- **Physical Quantities**: Quantity columns end with `_scaled` and utilize unit precision scales (e.g. 0 for pieces, 3 for grams/litres).
-- **Historical Snapshot Preservation**: Posted bills snapshot product names, SKUs, and unit costs at the moment of posting. Master catalog modifications never alter historical financial records.
+- **Primary Keys**: Universally Unique Identifiers (UUID v4 format stored as `TEXT` in SQLite / native `UUID` in PostgreSQL).
+- **Multi-Tenant & Multi-Branch Hierarchy**: Root `businesses` table (`business_id`), child `branches` (`branch_id`), and store terminal `counters`.
+- **Composite Referential Integrity**: Composite foreign keys prevent cross-tenant cross-wiring (e.g., counters cannot reference a branch from a different business; users cannot be granted roles belonging to a foreign business).
+- **Monetary Convention**: Currency columns end with `_minor` and store integer minor currency units (paisa/cents). Authoritative financial calculations never use floating-point numbers.
+- **Physical Quantities**: Quantity columns end with `_scaled` and utilize precision scale factors (`QUANTITY_SCALE = 10,000`).
+- **Historical Snapshot Preservation**: Posted bills snapshot product names, SKUs, tax rates, bill discounts, and unit costs at the moment of posting. Master catalog modifications never alter historical financial records.
+- **Append-Only Immutability**: Critical security logs (`audit_logs`) are protected by SQLite triggers that abort any `DELETE` or `UPDATE` operation.
 
 ---
 
@@ -18,6 +22,18 @@ Data consistency, auditability, and historical non-repudiation are enforced at t
 
 ```mermaid
 erDiagram
+    businesses ||--o{ branches : "owns"
+    businesses ||--o{ business_settings : "configures"
+    businesses ||--o{ business_modules : "activates"
+    businesses ||--o{ users : "employs"
+    businesses ||--o{ roles : "defines"
+    businesses ||--o{ audit_logs : "records"
+
+    branches ||--o{ counters : "deploys"
+    branches ||--o{ user_branch_access : "assigns"
+    branches ||--o{ stock_movements : "located at"
+    branches ||--o{ stock_balances : "balance at"
+
     users ||--o{ user_roles : "assigned"
     roles ||--o{ user_roles : "grants"
     roles ||--o{ role_permissions : "includes"
@@ -25,6 +41,8 @@ erDiagram
     users ||--o{ audit_logs : "triggers"
     users ||--o{ sales : "creates"
     users ||--o{ cash_sessions : "opens/closes"
+
+    module_definitions ||--o{ business_modules : "instantiates"
 
     categories ||--o{ categories : "parent of"
     categories ||--o{ products : "categorizes"
@@ -39,9 +57,6 @@ erDiagram
     products ||--o{ product_batches : "batched in"
     products ||--o{ product_serial_numbers : "serialized with"
 
-    locations ||--o{ registers : "contains"
-    locations ||--o{ stock_movements : "located at"
-    locations ||--o{ stock_balances : "balance at"
     stock_movements ||--|| stock_balances : "projects to"
 
     customers ||--o{ customer_ledger_entries : "account statement"
@@ -71,19 +86,24 @@ erDiagram
 
 ## 3. Logical Table Groups & Detailed Column Definitions
 
-### GROUP A: Business Settings & Security
+### GROUP A: Universal Enterprise Multi-Tenancy & Security
 | Table | Columns | Purpose & Invariants |
 |---|---|---|
-| `business_settings` | `id`, `business_name`, `address`, `phone`, `logo_path`, `currency_code`, `currency_precision`, `timezone`, `updated_at` | Store profile and currency precision rules |
-| `app_settings` | `setting_key` (PK), `setting_value`, `updated_at` | Configurable system-wide flags and options |
-| `users` | `id`, `username` (UNIQUE), `password_hash`, `full_name`, `is_active`, `created_at` | System operators (passwords always hashed via bcrypt; plain text strictly forbidden) |
-| `roles` | `id`, `name` (UNIQUE), `description` | Standard roles: ADMIN, MANAGER, CASHIER, INVENTORY_CLERK |
-| `permissions` | `id`, `permission_key` (UNIQUE), `description` | Granular permission keys |
-| `user_roles` | `user_id` (FK), `role_id` (FK), `PRIMARY KEY (user_id, role_id)` | Mapping of users to roles |
-| `role_permissions` | `role_id` (FK), `permission_id` (FK), `PRIMARY KEY (role_id, permission_id)` | Role-based permission assignments |
-| `audit_logs` | `id`, `user_id` (FK), `action`, `entity_type`, `entity_id`, `reason`, `details`, `created_at` | Non-repudiation audit trail for sensitive administrative changes |
+| `businesses` | `id` (UUID PK), `name`, `legal_name`, `business_type`, `registration_number`, `phone`, `email`, `address`, `default_currency`, `timezone`, `is_active`, `created_at`, `updated_at` | Root enterprise tenant profile; defines currency and timezone boundaries |
+| `branches` | `id` (UUID PK), `business_id` (FK), `name`, `code`, `address`, `phone`, `is_active`, `created_at`, `updated_at`, `UNIQUE(business_id, code)`, `UNIQUE(id, business_id)` | Physical retail store branches; unique code per business |
+| `counters` | `id` (UUID PK), `business_id` (FK), `branch_id` (FK), `name`, `code`, `device_identifier`, `is_active`, `created_at`, `updated_at`, `UNIQUE(branch_id, code)`, `FOREIGN KEY (branch_id, business_id) REFERENCES branches(id, business_id)` | Checkout register / terminal; composite foreign key guarantees counter cannot reference another business's branch |
+| `users` | `id` (UUID PK), `business_id` (FK), `username`, `password_hash`, `full_name`, `email`, `phone`, `is_active`, `last_login_at`, `created_at`, `updated_at`, `UNIQUE(business_id, username)`, `UNIQUE(id, business_id)` | System operators; passwords strictly bcrypt hashed; duplicate usernames allowed across distinct businesses but strictly forbidden within the same business |
+| `roles` | `id` (UUID PK), `business_id` (FK), `name`, `description`, `is_system_role`, `created_at`, `updated_at`, `UNIQUE(business_id, name)`, `UNIQUE(id, business_id)` | Authorization roles scoped per business; system roles protected |
+| `permissions` | `id` (UUID PK), `code` (UNIQUE), `module`, `description` | Fine-grained capability definitions (e.g. `sales:create`, `sales:void`, `inventory:adjust`) |
+| `role_permissions` | `role_id` (FK), `permission_id` (FK), `PRIMARY KEY (role_id, permission_id)` | Role-to-permission mapping with cascading deletes on custom roles |
+| `user_roles` | `user_id` (FK), `role_id` (FK), `business_id` (FK), `PRIMARY KEY (user_id, role_id)`, `FOREIGN KEY (user_id, business_id) REFERENCES users(id, business_id)`, `FOREIGN KEY (role_id, business_id) REFERENCES roles(id, business_id)` | User-to-role assignment; composite foreign keys strictly prevent cross-business role granting |
+| `user_branch_access` | `user_id` (FK), `branch_id` (FK), `PRIMARY KEY (user_id, branch_id)` | Multi-branch access permissions for mobile store managers and cashiers |
+| `business_settings` | `id` (UUID PK), `business_id` (FK), `setting_key`, `setting_value` (JSON), `updated_by` (FK), `updated_at`, `UNIQUE(business_id, setting_key)` | Scoped key-value configuration store with JSON payloads |
+| `module_definitions` | `id` (UUID PK), `module_code` (UNIQUE), `module_name`, `description`, `is_core`, `dependencies` (JSON), `created_at` | Global catalog of business modules (Core, Weighing Scale, Batch Expiry, Variant Matrix, Serial/Warranty, Branch Sync) |
+| `business_modules` | `id` (UUID PK), `business_id` (FK), `module_id` (FK), `is_enabled`, `configuration` (JSON), `enabled_at`, `disabled_at`, `updated_by` (FK), `updated_at`, `UNIQUE(business_id, module_id)` | Activation and configuration of optional vertical features per business |
+| `audit_logs` | `id` (UUID PK), `business_id` (FK), `branch_id` (FK), `user_id` (FK), `action`, `entity_type`, `entity_id`, `before_data` (JSON), `after_data` (JSON), `reason`, `ip_address`, `device_identifier`, `created_at` | Append-only tamper-proof audit trail; protected by `trg_audit_logs_no_delete` and `trg_audit_logs_no_update` triggers |
 | `document_sequences` | `id`, `document_type` (UNIQUE), `prefix`, `next_number` | Atomic sequence generator (INV, PO, PAY, ADJ, SRN, PRN, WAR, EXP) |
-| `schema_migrations` | `version` (PK), `name`, `applied_at` | Version history of database schema migrations |
+| `schema_migrations` | `version` (PK), `name`, `applied_at` | Version history of sequential database schema migrations |
 
 ---
 
@@ -180,13 +200,22 @@ erDiagram
 
 ## 4. Key Database Invariant Rules
 
-1. **No Cascading Deletion of Posted Financial Records**:
+1. **Enterprise Multi-Tenant Isolation**:
+   - Every store entity has an authoritative `business_id` scoping.
+   - **Counter to Branch Isolation**: Counters cannot be linked to a branch that belongs to another business. Enforced via composite constraint: `FOREIGN KEY (branch_id, business_id) REFERENCES branches(id, business_id)`.
+   - **Username Uniqueness Scoping**: Usernames are unique within a business (`UNIQUE(business_id, username)`). Two independent businesses can have a user `admin` or `cashier1` without conflict.
+   - **Role Assignment Isolation**: Users cannot be assigned roles from a different business. Enforced by composite foreign keys on `user_roles`: `FOREIGN KEY (user_id, business_id) REFERENCES users(id, business_id)` and `FOREIGN KEY (role_id, business_id) REFERENCES roles(id, business_id)`.
+   - **Unique Business Modules**: A business cannot activate duplicate module entries: `UNIQUE(business_id, module_id)`.
+2. **Immutable Audit Trail**:
+   - `audit_logs` records cannot be updated or deleted under any circumstances.
+   - Guarded by SQLite triggers: `trg_audit_logs_no_delete` and `trg_audit_logs_no_update`, which invoke `SELECT RAISE(ABORT, ...)`.
+3. **No Cascading Deletion of Posted Financial Records**:
    `sales`, `sale_lines`, `purchases`, `purchase_lines`, `payments`, `payment_allocations`, `customer_ledger_entries`, and `supplier_ledger_entries` use `ON DELETE RESTRICT`. A customer, supplier, or product with posted records cannot be deleted.
-2. **Movements Authorize Balances**:
+4. **Movements Authorize Balances**:
    `stock_balances` is never adjusted directly in isolation. Every stock adjustment writes an immutable record to `stock_movements`, which in turn updates `stock_balances`.
-3. **Single Payment, Multiple Allocations**:
+5. **Single Payment, Multiple Allocations**:
    One `payments` record maps to multiple `payment_allocations`. An advance is managed as an allocation to `ADVANCE` until applied to a future bill.
-4. **Physical Cash Drawer Isolation**:
+6. **Physical Cash Drawer Isolation**:
    Only payment methods with `affects_cash_drawer = 1` generate entries in `cash_movements`. Bank transfers, cheques, and digital wallets do not inflate drawer cash.
-5. **Historical Snapshots**:
+7. **Historical Snapshots**:
    `sale_lines.product_name_snapshot`, `sku_snapshot`, `unit_price_minor`, and `unit_cost_minor` guarantee that retroactive catalog price increases or rebranding never alter previously posted invoices.
