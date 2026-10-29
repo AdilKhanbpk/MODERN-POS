@@ -8,6 +8,8 @@ const AccountRepository_1 = require("../../infrastructure/sqlite/repositories/Ac
 const transaction_runner_1 = require("../../infrastructure/sqlite/transactions/transaction-runner");
 const pricing_calculator_1 = require("../../domain/sales/pricing-calculator");
 const stock_rules_1 = require("../../domain/inventory/stock-rules");
+const stock_location_rules_1 = require("../../domain/inventory/stock-location-rules");
+const StockBalanceRepository_1 = require("../../infrastructure/sqlite/repositories/StockBalanceRepository");
 const double_entry_1 = require("../../domain/accounting/double-entry");
 const accounts_1 = require("../../shared/constants/accounts");
 class SalesService {
@@ -37,23 +39,77 @@ class SalesService {
         // 1. Calculate pricing via shared Domain Layer
         const calculation = pricing_calculator_1.PricingCalculator.calculateSale(request.items, request.orderDiscountPercent || 0, request.orderDiscountAmount || 0);
         // 2. Validate payment splits / credit
-        const isCredit = request.paymentMethod === accounts_1.PaymentMethod.CREDIT;
+        const isCredit = Boolean(request.isCredit || request.paymentMethod === accounts_1.PaymentMethod.CREDIT);
         const splitPayment = pricing_calculator_1.PricingCalculator.calculatePaymentSplit(calculation.grandTotal, request.amountPaid, isCredit);
-        // Check customer credit limit if credit is used
+        // Resolve customer and check credit rules
+        let effectiveCustomerId = request.customerId;
         if (splitPayment.customerBalanceChange > 0) {
-            if (!request.customerId) {
+            if (!effectiveCustomerId) {
                 throw new Error('Customer must be selected for credit transactions');
             }
-            const customer = this.customerRepo.findById(request.customerId);
+            const customer = this.customerRepo.findById(effectiveCustomerId);
             if (!customer) {
                 throw new Error('Customer not found');
+            }
+            if (customer.isActive === false) {
+                throw new Error(`Customer "${customer.name}" is inactive and cannot purchase on credit.`);
+            }
+            if (customer.customerCode === 'WALK-IN' || customer.name === 'Walk-in Customer') {
+                throw new Error('Credit sales cannot be charged to the Walk-in customer account.');
             }
             if (customer.creditLimit > 0 && (customer.balance + splitPayment.customerBalanceChange > customer.creditLimit)) {
                 throw new Error(`Credit limit exceeded! Allowed: ${customer.creditLimit / 100}, Attempted: ${(customer.balance + splitPayment.customerBalanceChange) / 100}`);
             }
         }
+        else if (!effectiveCustomerId) {
+            // Cash sale: default to Walk-in customer if not specified
+            const walkIn = this.customerRepo.list().find(c => c.customerCode === 'WALK-IN');
+            if (walkIn) {
+                effectiveCustomerId = walkIn.id;
+            }
+        }
         // 3. Perform atomic database transaction
         return transaction_runner_1.TransactionRunner.run((db) => {
+            // Step A0: Resolve and validate Stock Location (Prompt 11)
+            let stockLoc = null;
+            try {
+                if (request.locationId) {
+                    stockLoc = db.prepare('SELECT * FROM stock_locations WHERE id = ?').get(String(request.locationId));
+                }
+                else {
+                    if (request.counterId) {
+                        stockLoc = db.prepare(`
+              SELECT l.* FROM counter_stock_locations csl
+              JOIN stock_locations l ON csl.stock_location_id = l.id
+              WHERE csl.counter_id = ? AND csl.is_default = 1 AND l.is_active = 1
+            `).get(request.counterId);
+                    }
+                    if (!stockLoc && request.branchId) {
+                        stockLoc = db.prepare(`
+              SELECT * FROM stock_locations
+              WHERE branch_id = ? AND is_default = 1 AND is_active = 1
+            `).get(request.branchId);
+                    }
+                    if (!stockLoc) {
+                        stockLoc = db.prepare(`
+              SELECT * FROM stock_locations
+              WHERE is_default = 1 AND is_active = 1
+              LIMIT 1
+            `).get();
+                    }
+                }
+            }
+            catch {
+                // Migration not yet applied or table unavailable
+            }
+            if (stockLoc) {
+                stock_location_rules_1.StockLocationRules.validateSellable({
+                    name: stockLoc.name,
+                    isActive: Boolean(stockLoc.is_active),
+                    isSellable: Boolean(stockLoc.is_sellable),
+                    locationType: stockLoc.location_type
+                });
+            }
             // Step A: Validate stock and deduct inventory
             for (const item of request.items) {
                 const product = this.productRepo.findById(item.productId);
@@ -67,12 +123,22 @@ class SalesService {
                 }
                 const newStock = stock_rules_1.StockRules.computeNewStock(product.currentStock, accounts_1.StockMovementType.SALE, baseQtyNeeded);
                 this.productRepo.updateStock(product.id, newStock);
+                if (stockLoc) {
+                    const balanceRepo = new StockBalanceRepository_1.StockBalanceRepository(db);
+                    balanceRepo.upsertDelta({
+                        businessId: stockLoc.business_id,
+                        productId: product.id,
+                        stockLocationId: stockLoc.id,
+                        onHandDeltaScaled: -Math.round(baseQtyNeeded * 1000)
+                    });
+                }
                 this.productRepo.logStockMovement({
                     productId: product.id,
                     movementType: accounts_1.StockMovementType.SALE,
                     quantity: baseQtyNeeded,
                     previousStock: product.currentStock,
                     newStock,
+                    stockLocationId: stockLoc?.id,
                     referenceType: 'SALE',
                     reason: 'Retail sale deduction',
                     userId: request.cashierId
@@ -82,7 +148,7 @@ class SalesService {
             const invoiceNumber = this.saleRepo.getNextInvoiceNumber();
             const saleId = this.saleRepo.create({
                 invoiceNumber,
-                customerId: request.customerId,
+                customerId: effectiveCustomerId,
                 cashierId: request.cashierId,
                 subtotal: calculation.subtotal,
                 totalDiscount: calculation.totalDiscount,
@@ -90,7 +156,7 @@ class SalesService {
                 grandTotal: calculation.grandTotal,
                 totalCost: calculation.totalCostPrice,
                 profit: calculation.estimatedProfit,
-                paymentMethod: request.paymentMethod,
+                paymentMethod: request.paymentMethod || (isCredit ? 'CREDIT' : 'CASH'),
                 amountPaid: request.amountPaid,
                 changeGiven: splitPayment.changeGiven,
                 customerBalanceChange: splitPayment.customerBalanceChange,
@@ -103,12 +169,12 @@ class SalesService {
                     saleId,
                     productId: item.productId,
                     productName: product ? product.name : 'Unknown Product',
-                    productBarcode: product ? product.barcode : '',
-                    unitName: item.unitName,
+                    productBarcode: (product && product.barcode) ? product.barcode : (product?.sku || 'N/A'),
+                    unitName: item.unitName || 'Piece',
                     quantity: item.quantity,
                     conversionFactor: item.conversionFactor,
                     unitPrice: item.unitPrice,
-                    costPrice: item.costPrice,
+                    costPrice: item.costPrice ?? (product?.costPrice || product?.default_cost_minor || 0),
                     lineDiscount: item.lineDiscount,
                     lineTax: item.lineTax,
                     lineTotal: item.lineTotal,

@@ -28,7 +28,7 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
       name: string;
     }>;
 
-    expect(migrations.map(m => m.version)).toEqual([1, 2, 3, 4]);
+    expect(migrations.map(m => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 
     // 3. Verify key core tables exist
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
@@ -45,6 +45,7 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
     expect(tableNames).toContain('sale_lines');
     expect(tableNames).toContain('customers');
     expect(tableNames).toContain('customer_ledger_entries');
+    expect(tableNames).toContain('customer_payment_allocations');
     expect(tableNames).toContain('suppliers');
     expect(tableNames).toContain('supplier_ledger_entries');
     expect(tableNames).toContain('accounts');
@@ -103,12 +104,12 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
       VALUES (99, 99, 99, 'Legacy Sugar 1kg', 'BAR-SUGAR', 'Piece', 1, 1, 10000, 8000, 0, 0, 10000, 2000)
     `).run();
 
-    // Step 2: Execute migration runner to upgrade this V1 database to V2 and V3
+    // Step 2: Execute migration runner to upgrade this V1 database to V2, V3, V4, V5, V6 and V7
     runMigrations(db);
 
-    // Step 3: Verify migration version was upgraded to 3
+    // Step 3: Verify migration version was upgraded to 12
     const maxVer = db.prepare('SELECT MAX(version) as ver FROM schema_migrations').get() as { ver: number };
-    expect(maxVer.ver).toBe(3);
+    expect(maxVer.ver).toBe(13);
 
     // Step 4: Verify existing V1 data was preserved with 100% integrity
     const product = db.prepare('SELECT * FROM products WHERE id = 99').get() as any;

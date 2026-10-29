@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Product, StockMovementType } from '../../../shared/types';
-import { Search, Plus, AlertTriangle, Edit3, ArrowUpDown, RefreshCw, X, Check } from 'lucide-react';
+import { Search, Plus, AlertTriangle, Edit3, ArrowUpDown, RefreshCw, X, Check, Warehouse, Package } from 'lucide-react';
+import { ProductFormModal } from '../../components/products/ProductFormModal';
+import { StockLocationsView } from '../../components/inventory/StockLocationsView';
 
 export const InventoryPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [subTab, setSubTab] = useState<'products' | 'locations'>('products');
 
   // Modal state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -14,20 +18,6 @@ export const InventoryPage: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Form states
-  const [formData, setFormData] = useState({
-    id: undefined as number | undefined,
-    name: '',
-    categoryId: 1,
-    sku: '',
-    barcode: '',
-    baseUnit: 'Piece',
-    costPriceDecimal: '0',
-    sellingPriceDecimal: '0',
-    minStockLevel: 5,
-    taxRate: 0,
-    isTaxInclusive: true
-  });
-
   const [adjustData, setAdjustData] = useState({
     movementType: StockMovementType.ADJUSTMENT_ADD,
     quantity: 1,
@@ -45,6 +35,10 @@ export const InventoryPage: React.FC = () => {
         setProducts(prodList);
         setCategories(catList);
       }
+      if ((window.posApi as any)?.catalogue?.listBrands) {
+        const brandList = await (window.posApi as any).catalogue.listBrands('00000000-0000-0000-0000-000000000001');
+        setBrands(brandList || []);
+      }
     } catch (err) {
       console.error('Failed to load inventory data:', err);
     } finally {
@@ -57,37 +51,12 @@ export const InventoryPage: React.FC = () => {
   }, []);
 
   const openAddModal = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    setFormData({
-      id: undefined,
-      name: '',
-      categoryId: categories[0]?.id || 1,
-      sku: `SKU-${timestamp}`,
-      barcode: `890${timestamp}`,
-      baseUnit: 'Piece',
-      costPriceDecimal: '0.00',
-      sellingPriceDecimal: '0.00',
-      minStockLevel: 5,
-      taxRate: 0,
-      isTaxInclusive: true
-    });
+    setSelectedProduct(null);
     setIsProductModalOpen(true);
   };
 
   const openEditModal = (p: Product) => {
-    setFormData({
-      id: p.id,
-      name: p.name,
-      categoryId: p.categoryId,
-      sku: p.sku,
-      barcode: p.barcode,
-      baseUnit: p.baseUnit,
-      costPriceDecimal: (p.costPrice / 100).toFixed(2),
-      sellingPriceDecimal: (p.sellingPrice / 100).toFixed(2),
-      minStockLevel: p.minStockLevel,
-      taxRate: p.taxRate,
-      isTaxInclusive: p.isTaxInclusive
-    });
+    setSelectedProduct(p);
     setIsProductModalOpen(true);
   };
 
@@ -99,33 +68,6 @@ export const InventoryPage: React.FC = () => {
       reason: 'Physical stock reconciliation'
     });
     setIsAdjustModalOpen(true);
-  };
-
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        id: formData.id,
-        name: formData.name,
-        categoryId: Number(formData.categoryId),
-        sku: formData.sku,
-        barcode: formData.barcode,
-        baseUnit: formData.baseUnit,
-        costPrice: Math.round(parseFloat(formData.costPriceDecimal || '0') * 100),
-        sellingPrice: Math.round(parseFloat(formData.sellingPriceDecimal || '0') * 100),
-        currentStock: 0,
-        minStockLevel: Number(formData.minStockLevel),
-        taxRate: Number(formData.taxRate),
-        isTaxInclusive: formData.isTaxInclusive,
-        isActive: true
-      };
-
-      await window.posApi.inventory.saveProduct(payload);
-      setIsProductModalOpen(false);
-      loadData();
-    } catch (err: any) {
-      alert(`Error saving product: ${err.message}`);
-    }
   };
 
   const handleStockAdjustment = async (e: React.FormEvent) => {
@@ -156,40 +98,70 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="flex-1 p-6 flex flex-col overflow-hidden">
-      {/* Top action bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-        <div>
-          <h1 className="text-xl font-bold text-white">Inventory & Products</h1>
-          <p className="text-xs text-slate-400">Total catalog: {products.length} items</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition shadow-md shadow-blue-600/20"
-          >
-            <Plus className="w-4 h-4" /> Add Product
-          </button>
-
-          <button
-            onClick={loadData}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+      {/* Sub-tab Navigation */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={() => setSubTab('products')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'products'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Package className="w-4 h-4" /> Product Catalogue
+        </button>
+        <button
+          onClick={() => setSubTab('locations')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'locations'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Warehouse className="w-4 h-4" /> Stock Locations & Warehouses
+        </button>
       </div>
+
+      {subTab === 'locations' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StockLocationsView />
+        </div>
+      ) : (
+        <>
+          {/* Top action bar */}
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div>
+              <h1 className="text-xl font-bold text-white">Inventory & Products</h1>
+              <p className="text-xs text-slate-400">Total catalog: {products.length} items</p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="relative w-64">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition shadow-md shadow-blue-600/20"
+              >
+                <Plus className="w-4 h-4" /> Add Product
+              </button>
+
+              <button
+                onClick={loadData}
+                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
 
       {/* Products Table */}
       <div className="flex-1 overflow-y-auto mt-4 rounded-xl border border-slate-800 bg-slate-900/60">
@@ -261,137 +233,32 @@ export const InventoryPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+        </>
+      )}
 
       {/* Add / Edit Product Modal */}
-      {isProductModalOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white">
-                {formData.id ? 'Edit Product' : 'Add New Product'}
-              </h3>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400 block mb-1">Product Name</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  placeholder="e.g. Fresh Milk 1L"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">Barcode</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.barcode}
-                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">SKU</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">Category</label>
-                  <select
-                    value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">Base Packaging Unit</label>
-                  <input
-                    type="text"
-                    value={formData.baseUnit}
-                    onChange={(e) => setFormData({ ...formData, baseUnit: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                    placeholder="Piece, Box, Kg, etc."
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">Cost Price (Rs.)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.costPriceDecimal}
-                    onChange={(e) => setFormData({ ...formData, costPriceDecimal: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">Selling Retail Price (Rs.)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.sellingPriceDecimal}
-                    onChange={(e) => setFormData({ ...formData, sellingPriceDecimal: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-emerald-400"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">Low Stock Alert Level</label>
-                  <input
-                    type="number"
-                    value={formData.minStockLevel}
-                    onChange={(e) => setFormData({ ...formData, minStockLevel: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">Tax Rate (%)</label>
-                  <input
-                    type="number"
-                    value={formData.taxRate}
-                    onChange={(e) => setFormData({ ...formData, taxRate: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition mt-4"
-              >
-                Save Product
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProductFormModal
+        isOpen={isProductModalOpen}
+        onClose={() => setIsProductModalOpen(false)}
+        product={selectedProduct as any}
+        businessId="00000000-0000-0000-0000-000000000001"
+        onSaved={(_prod, keepOpen) => {
+          loadData();
+          if (!keepOpen) {
+            setIsProductModalOpen(false);
+          }
+        }}
+        categories={categories.map((c) => ({ id: String(c.id), name: c.name }))}
+        brands={brands}
+        units={[
+          { id: '00000000-0000-0000-0000-000000000001', name: 'Piece', symbol: 'pc' },
+          { id: '00000000-0000-0000-0000-000000000002', name: 'Kilogram', symbol: 'kg' },
+          { id: '00000000-0000-0000-0000-000000000003', name: 'Litre', symbol: 'L' },
+          { id: '00000000-0000-0000-0000-000000000004', name: 'Meter', symbol: 'm' },
+          { id: '00000000-0000-0000-0000-000000000005', name: 'Box', symbol: 'box' },
+          { id: '00000000-0000-0000-0000-000000000006', name: 'Pack', symbol: 'pk' },
+        ]}
+      />
 
       {/* Stock Adjustment Modal */}
       {isAdjustModalOpen && selectedProduct && (

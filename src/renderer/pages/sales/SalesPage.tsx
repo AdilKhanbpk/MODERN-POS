@@ -132,7 +132,7 @@ export const SalesPage: React.FC = () => {
     barcodeRef.current?.focus();
   };
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const updateQuantity = (productId: number | string, delta: number) => {
     setCart((prev) => {
       return prev
         .map((item) => {
@@ -146,7 +146,7 @@ export const SalesPage: React.FC = () => {
     });
   };
 
-  const removeItem = (productId: number) => {
+  const removeItem = (productId: number | string) => {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   };
 
@@ -283,7 +283,7 @@ export const SalesPage: React.FC = () => {
                     </div>
                     <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
                       <span>{formatCents(item.unitPrice)} / {item.unitName}</span>
-                      {item.taxRate > 0 && (
+                      {(item.taxRate ?? 0) > 0 && (
                         <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
                           +{item.taxRate}% Tax
                         </span>

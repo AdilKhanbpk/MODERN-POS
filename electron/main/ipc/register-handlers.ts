@@ -9,6 +9,18 @@ import { PayrollService } from '../../../src/application/services/PayrollService
 import { ReportService } from '../../../src/application/services/ReportService';
 import { BackupService } from '../../../src/application/services/BackupService';
 import { SettingsService } from '../../../src/application/services/SettingsService';
+import { OnboardingService } from '../../../src/application/services/OnboardingService';
+import { ApprovalService } from '../../../src/application/services/ApprovalService';
+import { RbacService } from '../../../src/application/authorization/RbacService';
+import { ModuleManager } from '../../../src/application/modules/ModuleManager';
+import { defaultModuleRegistry } from '../../../src/application/modules/ModuleRegistry';
+import { ProductCatalogService } from '../../../src/application/services/ProductCatalogService';
+import { UnitConversionService } from '../../../src/application/services/UnitConversionService';
+import { BarcodeService } from '../../../src/application/services/BarcodeService';
+import { CustomerService } from '../../../src/application/services/CustomerService';
+import { SupplierService } from '../../../src/application/services/SupplierService';
+import { StockLocationService } from '../../../src/application/services/StockLocationService';
+import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
 import { ThermalPrinterService } from '../printing/thermal-printer';
@@ -32,9 +44,19 @@ export function registerIpcHandlers(): void {
   const reportService = new ReportService();
   const backupService = new BackupService();
   const settingsService = new SettingsService();
+  const onboardingService = new OnboardingService();
+  const approvalService = new ApprovalService();
+  const rbacService = new RbacService();
   const customerRepo = new CustomerRepository();
   const supplierRepo = new SupplierRepository();
   const printerService = new ThermalPrinterService();
+  const moduleManager = new ModuleManager(getDatabase(), defaultModuleRegistry);
+  const productCatalogService = new ProductCatalogService(getDatabase());
+  const unitConversionService = new UnitConversionService(getDatabase());
+  const barcodeService = new BarcodeService(getDatabase());
+  const customerService = new CustomerService(getDatabase());
+  const supplierService = new SupplierService(getDatabase());
+  const stockLocationService = new StockLocationService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -52,7 +74,20 @@ export function registerIpcHandlers(): void {
   // --- Auth Handlers ---
   handle(IPC_CHANNELS.AUTH_LOGIN, (payload: any) => {
     const validated = LoginSchema.parse(payload);
-    return authService.login(validated.username, validated.password);
+    return authService.login({
+      username: validated.username,
+      passwordPlain: validated.password,
+      deviceIdentifier: payload.deviceIdentifier
+    });
+  });
+
+  handle(IPC_CHANNELS.AUTH_VERIFY_SESSION, (sessionToken: string) => {
+    return authService.verifySession(sessionToken);
+  });
+
+  handle(IPC_CHANNELS.AUTH_LOGOUT, (sessionToken?: string) => {
+    authService.logout(sessionToken);
+    return true;
   });
 
   handle(IPC_CHANNELS.AUTH_GET_CURRENT_USER, () => {
@@ -70,6 +105,57 @@ export function registerIpcHandlers(): void {
   handle(IPC_CHANNELS.AUTH_UPDATE_PASSWORD, (payload: any) => {
     authService.updatePassword(payload.userId, payload.newPassword);
     return true;
+  });
+
+  handle(IPC_CHANNELS.AUTH_CHANGE_PASSWORD, (payload: { userId: string; currentPasswordPlain: string; newPasswordPlain: string }) => {
+    authService.changePassword(payload.userId, payload.currentPasswordPlain, payload.newPasswordPlain);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.AUTH_ADMIN_RESET_PASSWORD, (payload: { targetUserId: string; newPasswordPlain: string; sessionToken: string }) => {
+    const adminContext = authService.verifySession(payload.sessionToken);
+    authService.adminResetPassword(payload.targetUserId, payload.newPasswordPlain, adminContext);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.AUTH_REVOKE_SESSION, (payload: { sessionId: string; sessionToken: string }) => {
+    const adminContext = authService.verifySession(payload.sessionToken);
+    authService.revokeAllUserSessions(payload.sessionId, adminContext);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.AUTH_REVOKE_ALL_SESSIONS, (payload: { userId: string; sessionToken: string }) => {
+    const adminContext = authService.verifySession(payload.sessionToken);
+    authService.revokeAllUserSessions(payload.userId, adminContext);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.AUTH_GET_PERMISSIONS, (payload: { userId: string; businessId: string }) => {
+    return Array.from(rbacService.getUserPermissions(payload.userId, payload.businessId));
+  });
+
+  // --- Approvals Handlers ---
+  handle(IPC_CHANNELS.APPROVALS_REQUEST, (payload: { sessionToken: string; request: any }) => {
+    const context = authService.verifySession(payload.sessionToken);
+    return approvalService.createRequest(context, payload.request);
+  });
+
+  handle(IPC_CHANNELS.APPROVALS_DECIDE, (payload: { sessionToken: string; requestId: string; decision: 'APPROVED' | 'REJECTED'; reason?: string }) => {
+    const context = authService.verifySession(payload.sessionToken);
+    return approvalService.decideRequest(context, {
+      requestId: payload.requestId,
+      decision: payload.decision,
+      reason: payload.reason
+    });
+  });
+
+  handle(IPC_CHANNELS.APPROVALS_LIST_PENDING, (payload: { sessionToken: string; branchId?: string }) => {
+    const context = authService.verifySession(payload.sessionToken);
+    return approvalService.listPending(context, payload.branchId);
+  });
+
+  handle(IPC_CHANNELS.APPROVALS_GET_REQUEST, (requestId: string) => {
+    return approvalService.getRequest(requestId);
   });
 
   // --- Sales & POS Handlers ---
@@ -127,49 +213,163 @@ export function registerIpcHandlers(): void {
   });
 
   // --- Customers Handlers ---
-  handle(IPC_CHANNELS.CUSTOMERS_LIST, () => {
-    return customerRepo.list();
+  handle(IPC_CHANNELS.CUSTOMERS_LIST, (options?: any) => {
+    const businessId = options?.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.listCustomers(businessId, options);
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_GET_BY_ID, (payload: { id: string | number; businessId?: string }) => {
+    const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.getCustomerById(businessId, payload.id);
   });
 
   handle(IPC_CHANNELS.CUSTOMERS_SEARCH, (query: string) => {
-    return customerRepo.search(query);
+    return customerService.listCustomers('00000000-0000-0000-0000-000000000001', { query });
   });
 
   handle(IPC_CHANNELS.CUSTOMERS_SAVE, (payload: any) => {
-    const validated = CustomerSchema.parse(payload);
-    return customerRepo.create(validated as any);
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return customerService.createCustomer(payload, actor);
   });
 
-  handle(IPC_CHANNELS.CUSTOMERS_GET_LEDGER, (customerId: number) => {
-    return customerRepo.getLedger(customerId);
+  handle(IPC_CHANNELS.CUSTOMERS_UPDATE, (payload: { id: string | number; dto: any; businessId?: string }) => {
+    const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+    return customerService.updateCustomer(payload.id, payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_GET_LEDGER, (customerId: string | number) => {
+    return customerRepo.getLedger(Number(customerId));
   });
 
   handle(IPC_CHANNELS.CUSTOMERS_RECORD_PAYMENT, (payload: any) => {
-    accountService.recordCustomerPayment(payload);
-    return true;
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return customerService.recordCustomerPayment(payload, actor);
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_CHECK_CREDIT, (payload: {
+    customerId: string | number;
+    newCreditMinor: number;
+    businessId?: string;
+    hasApproval?: boolean;
+  }) => {
+    const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.checkCreditExposure(
+      businessId,
+      payload.customerId,
+      payload.newCreditMinor,
+      payload.hasApproval
+    );
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_STATEMENT, (payload: {
+    customerId: string | number;
+    businessId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
+    const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.getCustomerStatement(
+      businessId,
+      payload.customerId,
+      payload.fromDate,
+      payload.toDate
+    );
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_OUTSTANDING_INVOICES, (payload: {
+    customerId: string | number;
+    businessId?: string;
+  }) => {
+    const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.getOutstandingInvoices(businessId, payload.customerId);
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_ALLOCATE_PAYMENT, (payload: any) => {
+    const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+    return customerService.allocatePayment(payload, actor);
+  });
+
+  handle(IPC_CHANNELS.CUSTOMERS_RECONCILE, (payload: {
+    customerId: string | number;
+    businessId?: string;
+  }) => {
+    const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return customerService.reconcileCustomerBalance(businessId, payload.customerId);
   });
 
   // --- Suppliers Handlers ---
-  handle(IPC_CHANNELS.SUPPLIERS_LIST, () => {
-    return supplierRepo.list();
+  handle(IPC_CHANNELS.SUPPLIERS_LIST, (payload?: { businessId?: string; filter?: any }) => {
+    return supplierService.listSuppliers(payload?.businessId, payload?.filter);
   });
 
-  handle(IPC_CHANNELS.SUPPLIERS_SEARCH, (query: string) => {
-    return supplierRepo.search(query);
+  handle(IPC_CHANNELS.SUPPLIERS_GET_BY_ID, (payload: { id: string | number; businessId?: string }) => {
+    return supplierService.getSupplierById(payload.id, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_SEARCH, (payload: string | { query: string; businessId?: string }) => {
+    const query = typeof payload === 'string' ? payload : payload.query;
+    const bizId = typeof payload === 'object' ? payload.businessId : undefined;
+    return supplierService.listSuppliers(bizId, { query });
   });
 
   handle(IPC_CHANNELS.SUPPLIERS_SAVE, (payload: any) => {
-    const validated = SupplierSchema.parse(payload);
-    return supplierRepo.create(validated as any);
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return supplierService.createSupplier(payload, actor);
   });
 
-  handle(IPC_CHANNELS.SUPPLIERS_GET_LEDGER, (supplierId: number) => {
+  handle(IPC_CHANNELS.SUPPLIERS_UPDATE, (payload: { id: string | number; dto: any; businessId?: string }) => {
+    const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+    return supplierService.updateSupplier(payload.id, payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_GET_LEDGER, (supplierId: string | number) => {
     return supplierRepo.getLedger(supplierId);
   });
 
   handle(IPC_CHANNELS.SUPPLIERS_RECORD_PAYMENT, (payload: any) => {
-    accountService.recordSupplierPayment(payload);
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return supplierService.recordSupplierPayment(payload, actor);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_REVERSE_PAYMENT, (payload: { paymentId: string; reason: string; userId?: string | number }) => {
+    const actor = { userId: payload.userId || 1, role: 'owner' };
+    supplierService.reverseSupplierPayment(payload.paymentId, payload.reason, actor);
     return true;
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_STATEMENT, (payload: {
+    supplierId: string | number;
+    businessId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
+    return supplierService.getSupplierStatement(
+      payload.supplierId,
+      payload.fromDate,
+      payload.toDate,
+      payload.businessId
+    );
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_OUTSTANDING_INVOICES, (payload: {
+    supplierId: string | number;
+    businessId?: string;
+  }) => {
+    return supplierService.getOutstandingPurchaseInvoices(payload.supplierId, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_RECORD_RETURN, (payload: any) => {
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return supplierService.recordSupplierReturn(payload, actor);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_RECORD_ADJUSTMENT, (payload: any) => {
+    const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+    return supplierService.recordAdjustment(payload, actor);
+  });
+
+  handle(IPC_CHANNELS.SUPPLIERS_RECONCILE, (payload: { supplierId: string | number }) => {
+    return supplierService.reconcileSupplierBalance(payload.supplierId);
   });
 
   // --- Accounts Handlers ---
@@ -266,6 +466,241 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.BACKUP_RESTORE, (filePath: string) => {
     return backupService.restoreBackup(filePath);
+  });
+
+  // --- Onboarding Handlers ---
+  handle(IPC_CHANNELS.ONBOARDING_GET_STATUS, () => {
+    return onboardingService.getStatus();
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_SAVE_DRAFT, (draft: any) => {
+    onboardingService.saveDraft(draft);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_GET_DRAFT, () => {
+    return onboardingService.getDraft();
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_CLEAR_DRAFT, () => {
+    onboardingService.clearDraft();
+    return true;
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_GET_MODULE_DEFINITIONS, (businessId?: string) => {
+    return onboardingService.getModuleDefinitions(businessId);
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_COMPLETE, (payload: any) => {
+    return onboardingService.completeOnboarding(payload);
+  });
+
+  handle(IPC_CHANNELS.ONBOARDING_UPDATE_MODULE, (params: { businessId: string; moduleCode: string; isEnabled: boolean }) => {
+    onboardingService.updateModuleStatus(params.businessId, params.moduleCode, params.isEnabled);
+    return true;
+  });
+
+  // --- Module Management & Framework ---
+  handle(IPC_CHANNELS.MODULES_GET_NAVIGATION, (params: { businessId: string; userPermissions?: string[] }) => {
+    return moduleManager.getNavigation(params.businessId, params.userPermissions || []);
+  });
+
+  handle(IPC_CHANNELS.MODULES_LIST, () => {
+    return defaultModuleRegistry.getAllModules();
+  });
+
+  handle(IPC_CHANNELS.MODULES_STATUS_LIST, (params: { businessId: string }) => {
+    return moduleManager.getModuleStatusList(params.businessId);
+  });
+
+  handle(IPC_CHANNELS.MODULES_ENABLE, (params: { businessId: string; moduleCode: string; userId?: string }) => {
+    moduleManager.enableModule(params.businessId, params.moduleCode, params.userId);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.MODULES_DISABLE, (params: { businessId: string; moduleCode: string; userId?: string }) => {
+    moduleManager.disableModule(params.businessId, params.moduleCode, params.userId);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.MODULES_EVENTS, (params: { businessId: string; moduleCode?: string }) => {
+    return moduleManager.getModuleEvents(params.businessId, params.moduleCode);
+  });
+
+  // --- Product Catalogue Handlers (Prompt 6) ---
+  handle(IPC_CHANNELS.PRODUCTS_CREATE, (payload: { dto: any; userId?: string }) => {
+    return productCatalogService.createProduct(payload.dto, payload.userId);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_UPDATE, (payload: { id: string; dto: any; userId?: string }) => {
+    return productCatalogService.updateProduct(payload.id, payload.dto, payload.userId);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_ARCHIVE, (payload: { businessId: string; id: string }) => {
+    productCatalogService.archiveProduct(payload.businessId, payload.id);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_DELETE, (payload: { businessId: string; id: string }) => {
+    productCatalogService.deleteProduct(payload.businessId, payload.id);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_DUPLICATE, (payload: { businessId: string; id: string; newSku: string; newName?: string }) => {
+    return productCatalogService.duplicateProduct(payload.businessId, payload.id, payload.newSku, payload.newName);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_SEARCH, (params: any) => {
+    return productCatalogService.searchProducts(params);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_GET_BY_ID, (payload: { businessId: string; id: string }) => {
+    return productCatalogService.getProductById(payload.businessId, payload.id);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_LIST_CATEGORIES, (payload: { businessId: string }) => {
+    return productCatalogService.listCategories(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_CREATE_CATEGORY, (dto: any) => {
+    return productCatalogService.createCategory(dto);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_UPDATE_CATEGORY, (payload: { id: string; businessId: string; dto: any }) => {
+    return productCatalogService.updateCategory(payload.id, payload.businessId, payload.dto);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_LIST_BRANDS, (payload: { businessId: string }) => {
+    return productCatalogService.listBrands(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_CREATE_BRAND, (dto: any) => {
+    return productCatalogService.createBrand(dto);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_SET_PRICE, (dto: any) => {
+    return productCatalogService.createProductPrice(dto);
+  });
+
+  handle(IPC_CHANNELS.PRODUCTS_GET_PRICES, (payload: { businessId: string; productId: string }) => {
+    return productCatalogService.getProductPrices(payload.businessId, payload.productId);
+  });
+
+  // Units & Conversions (Prompt 7)
+  handle(IPC_CHANNELS.UNITS_LIST, (payload?: { businessId?: string }) => {
+    return unitConversionService.listUnits(payload?.businessId);
+  });
+
+  handle(IPC_CHANNELS.UNITS_CREATE, (payload: { dto: any; actor: any }) => {
+    return unitConversionService.createUnit(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.UNITS_GET_CONVERSIONS, (payload: { productId: string | number }) => {
+    return unitConversionService.getProductConversions(payload.productId);
+  });
+
+  handle(IPC_CHANNELS.UNITS_SAVE_CONVERSION, (payload: { dto: any; actor: any }) => {
+    return unitConversionService.saveProductUnitConversion(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.UNITS_CONVERT_TO_BASE, (payload: { productId: string | number; enteredQuantity: number; enteredUnitId: string | number }) => {
+    return unitConversionService.convertToBaseQuantity(payload.productId, payload.enteredQuantity, payload.enteredUnitId);
+  });
+
+  handle(IPC_CHANNELS.UNITS_CONVERT_FROM_BASE, (payload: { productId: string | number; baseQuantity: number; targetUnitId: string | number }) => {
+    return unitConversionService.convertFromBaseQuantity(payload.productId, payload.baseQuantity, payload.targetUnitId);
+  });
+
+  handle(IPC_CHANNELS.UNITS_CONVERT_PRICE, (payload: { productId: string | number; fromUnitId: string | number; toUnitId: string | number; priceMinor: number; roundingMode?: any }) => {
+    return unitConversionService.convertUnitPrice(payload.productId, payload.fromUnitId, payload.toUnitId, payload.priceMinor, payload.roundingMode);
+  });
+
+  handle(IPC_CHANNELS.UNITS_CALCULATE_RETURN, (payload: any) => {
+    return unitConversionService.calculateSaleReturn(payload);
+  });
+
+  // Barcodes & Scale Profiles (Prompt 8)
+  handle(IPC_CHANNELS.BARCODES_LOOKUP, (payload: { businessId: string; barcode: string }) => {
+    return barcodeService.lookupBarcode(payload.businessId, payload.barcode);
+  });
+
+  handle(IPC_CHANNELS.BARCODES_ADD, (payload: { dto: any; actor: any }) => {
+    return barcodeService.addBarcode(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.BARCODES_SET_PRIMARY, (payload: { businessId: string; productId: string | number; barcodeId: string }) => {
+    return barcodeService.setPrimaryBarcode(payload.businessId, payload.productId, payload.barcodeId);
+  });
+
+  handle(IPC_CHANNELS.BARCODES_DEACTIVATE, (payload: { businessId: string; barcodeId: string }) => {
+    return barcodeService.deactivateBarcode(payload.businessId, payload.barcodeId);
+  });
+
+  handle(IPC_CHANNELS.BARCODES_LIST_PRODUCT, (payload: { productId: string | number }) => {
+    return barcodeService.listProductBarcodes(payload.productId);
+  });
+
+  handle(IPC_CHANNELS.SCALE_PROFILES_LIST, (payload: { businessId: string }) => {
+    return barcodeService.listScaleProfiles(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.SCALE_PROFILES_CREATE, (payload: { dto: any; actor: any }) => {
+    return barcodeService.createScaleProfile(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.SCALE_PROFILES_TEST, (payload: { barcode: string; profileIdOrProfile: any }) => {
+    return barcodeService.testScaleBarcodeDiagnostic(payload.barcode, payload.profileIdOrProfile);
+  });
+
+  // --- Stock Locations Handlers (Prompt 11) ---
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_LIST, (payload?: { businessId?: string; branchId?: string; includeInactive?: boolean }) => {
+    const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+    return stockLocationService.getLocations(bizId, payload?.branchId, payload?.includeInactive);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_GET_BY_ID, (payload: { id: string; businessId?: string }) => {
+    const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return stockLocationService.getLocationById(payload.id, bizId);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_CREATE, (payload: { dto: any; actor?: any }) => {
+    const bizId = payload.dto.businessId || '00000000-0000-0000-0000-000000000001';
+    const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+    return stockLocationService.createLocation({ ...payload.dto, businessId: bizId }, actor);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_UPDATE, (payload: { id: string; dto: any; actor?: any }) => {
+    const bizId = payload.dto?.businessId || '00000000-0000-0000-0000-000000000001';
+    const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+    return stockLocationService.updateLocation(payload.id, payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_ARCHIVE, (payload: { id: string; actor?: any }) => {
+    const bizId = payload.actor?.businessId || '00000000-0000-0000-0000-000000000001';
+    const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+    stockLocationService.archiveLocation(payload.id, actor);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_GET_STOCK, (payload: { locationId: string; businessId?: string; filter?: any }) => {
+    const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return stockLocationService.getLocationStock(payload.locationId, bizId, payload.filter);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_GET_PRODUCT_STOCK, (payload: { productId: string | number; businessId?: string }) => {
+    const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return stockLocationService.getProductStockByLocations(payload.productId, bizId);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_TRANSFER, (payload: { dto: any; actor?: any }) => {
+    const bizId = payload.dto.businessId || '00000000-0000-0000-0000-000000000001';
+    const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+    return stockLocationService.transferStock({ ...payload.dto, businessId: bizId }, actor);
+  });
+
+  handle(IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, (payload: { locationId: string; businessId?: string; limit?: number }) => {
+    const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+    return stockLocationService.getLocationMovements(payload.locationId, bizId, payload.limit);
   });
 }
 

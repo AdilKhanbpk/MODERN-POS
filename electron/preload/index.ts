@@ -4,7 +4,9 @@ import {
   User, Customer, Supplier, Product, Sale, SaleCalculationResult,
   CreateSaleRequest, CreatePurchaseOrderRequest, PurchaseOrder,
   Account, JournalEntry, JournalEntryLine, Expense, Employee,
-  PayrollRun, SystemSettings, DailyZReport, CartItemInput, StockAdjustmentRequest
+  PayrollRun, SystemSettings, DailyZReport, CartItemInput, StockAdjustmentRequest,
+  OnboardingPayload, OnboardingDraft, OnboardingStatus, ModuleDefinitionWithEnables,
+  SecurityContext, LoginResult, ApprovalRequest
 } from '../../src/shared/types';
 import { Role } from '../../src/shared/constants/roles-permissions';
 
@@ -19,8 +21,12 @@ async function invoke<T = any>(channel: string, payload?: any): Promise<T> {
 export const posApi = {
   // Auth
   auth: {
-    login: (username: string, passwordPlain: string): Promise<User> =>
-      invoke(IPC_CHANNELS.AUTH_LOGIN, { username, password: passwordPlain }),
+    login: (username: string, passwordPlain: string, deviceIdentifier?: string): Promise<LoginResult | User> =>
+      invoke(IPC_CHANNELS.AUTH_LOGIN, { username, password: passwordPlain, deviceIdentifier }),
+    verifySession: (sessionToken: string): Promise<SecurityContext> =>
+      invoke(IPC_CHANNELS.AUTH_VERIFY_SESSION, sessionToken),
+    logout: (sessionToken?: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.AUTH_LOGOUT, sessionToken),
     getCurrentUser: (): Promise<User | null> =>
       invoke(IPC_CHANNELS.AUTH_GET_CURRENT_USER),
     listUsers: (): Promise<User[]> =>
@@ -28,7 +34,29 @@ export const posApi = {
     createUser: (data: { username: string; passwordPlain: string; fullName: string; role: Role }): Promise<number> =>
       invoke(IPC_CHANNELS.AUTH_CREATE_USER, data),
     updatePassword: (userId: number, newPasswordPlain: string): Promise<boolean> =>
-      invoke(IPC_CHANNELS.AUTH_UPDATE_PASSWORD, { userId, newPassword: newPasswordPlain })
+      invoke(IPC_CHANNELS.AUTH_UPDATE_PASSWORD, { userId, newPassword: newPasswordPlain }),
+    changePassword: (userId: string, currentPasswordPlain: string, newPasswordPlain: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.AUTH_CHANGE_PASSWORD, { userId, currentPasswordPlain, newPasswordPlain }),
+    adminResetPassword: (targetUserId: string, newPasswordPlain: string, sessionToken: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.AUTH_ADMIN_RESET_PASSWORD, { targetUserId, newPasswordPlain, sessionToken }),
+    revokeSession: (sessionId: string, sessionToken: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.AUTH_REVOKE_SESSION, { sessionId, sessionToken }),
+    revokeAllUserSessions: (userId: string, sessionToken: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.AUTH_REVOKE_ALL_SESSIONS, { userId, sessionToken }),
+    getUserPermissions: (userId: string, businessId: string): Promise<string[]> =>
+      invoke(IPC_CHANNELS.AUTH_GET_PERMISSIONS, { userId, businessId })
+  },
+
+  // Approvals & Overrides
+  approvals: {
+    request: (sessionToken: string, request: any): Promise<ApprovalRequest> =>
+      invoke(IPC_CHANNELS.APPROVALS_REQUEST, { sessionToken, request }),
+    decide: (sessionToken: string, requestId: string, decision: 'APPROVED' | 'REJECTED', reason?: string): Promise<ApprovalRequest> =>
+      invoke(IPC_CHANNELS.APPROVALS_DECIDE, { sessionToken, requestId, decision, reason }),
+    listPending: (sessionToken: string, branchId?: string): Promise<ApprovalRequest[]> =>
+      invoke(IPC_CHANNELS.APPROVALS_LIST_PENDING, { sessionToken, branchId }),
+    getRequest: (requestId: string): Promise<ApprovalRequest | null> =>
+      invoke(IPC_CHANNELS.APPROVALS_GET_REQUEST, requestId)
   },
 
   // Sales & POS Terminal
@@ -65,30 +93,60 @@ export const posApi = {
 
   // Customers
   customers: {
-    list: (): Promise<Customer[]> =>
-      invoke(IPC_CHANNELS.CUSTOMERS_LIST),
-    search: (query: string): Promise<Customer[]> =>
+    list: (options?: any): Promise<any[]> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_LIST, options),
+    getById: (id: string | number, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_GET_BY_ID, { id, businessId }),
+    search: (query: string): Promise<any[]> =>
       invoke(IPC_CHANNELS.CUSTOMERS_SEARCH, query),
-    save: (customer: any): Promise<number> =>
+    save: (customer: any): Promise<any> =>
       invoke(IPC_CHANNELS.CUSTOMERS_SAVE, customer),
-    getLedger: (customerId: number): Promise<any[]> =>
+    update: (id: string | number, dto: any, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_UPDATE, { id, dto, businessId }),
+    getLedger: (customerId: number | string): Promise<any[]> =>
       invoke(IPC_CHANNELS.CUSTOMERS_GET_LEDGER, customerId),
-    recordPayment: (customerId: number, amountPaid: number, notes?: string): Promise<boolean> =>
-      invoke(IPC_CHANNELS.CUSTOMERS_RECORD_PAYMENT, { customerId, amountPaid, notes })
+    recordPayment: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_RECORD_PAYMENT, payload),
+    checkCredit: (customerId: string | number, newCreditMinor: number, businessId?: string, hasApproval?: boolean): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_CHECK_CREDIT, { customerId, newCreditMinor, businessId, hasApproval }),
+    getStatement: (customerId: string | number, businessId?: string, fromDate?: string, toDate?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_STATEMENT, { customerId, businessId, fromDate, toDate }),
+    getOutstandingInvoices: (customerId: string | number, businessId?: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_OUTSTANDING_INVOICES, { customerId, businessId }),
+    allocatePayment: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_ALLOCATE_PAYMENT, dto),
+    reconcile: (customerId: string | number, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.CUSTOMERS_RECONCILE, { customerId, businessId })
   },
 
   // Suppliers
   suppliers: {
-    list: (): Promise<Supplier[]> =>
-      invoke(IPC_CHANNELS.SUPPLIERS_LIST),
-    search: (query: string): Promise<Supplier[]> =>
+    list: (payload?: any): Promise<any[]> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_LIST, payload),
+    getById: (id: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_GET_BY_ID, { id }),
+    search: (query: string): Promise<any[]> =>
       invoke(IPC_CHANNELS.SUPPLIERS_SEARCH, query),
-    save: (supplier: any): Promise<number> =>
+    save: (supplier: any): Promise<any> =>
       invoke(IPC_CHANNELS.SUPPLIERS_SAVE, supplier),
-    getLedger: (supplierId: number): Promise<any[]> =>
+    update: (id: string | number, dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_UPDATE, { id, dto }),
+    getLedger: (supplierId: string | number): Promise<any[]> =>
       invoke(IPC_CHANNELS.SUPPLIERS_GET_LEDGER, supplierId),
-    recordPayment: (supplierId: number, amountPaid: number, notes?: string): Promise<boolean> =>
-      invoke(IPC_CHANNELS.SUPPLIERS_RECORD_PAYMENT, { supplierId, amountPaid, notes })
+    recordPayment: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_RECORD_PAYMENT, payload),
+    reversePayment: (payload: { paymentId: string; reason: string }): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_REVERSE_PAYMENT, payload),
+    getStatement: (payload: { supplierId: string | number; fromDate?: string; toDate?: string }): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_STATEMENT, payload),
+    getOutstandingInvoices: (supplierId: string | number): Promise<any[]> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_OUTSTANDING_INVOICES, { supplierId }),
+    recordReturn: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_RECORD_RETURN, payload),
+    recordAdjustment: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_RECORD_ADJUSTMENT, payload),
+    reconcile: (supplierId: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.SUPPLIERS_RECONCILE, { supplierId })
   },
 
   // Purchases
@@ -169,6 +227,133 @@ export const posApi = {
       invoke(IPC_CHANNELS.BACKUP_LIST, backupDir),
     restore: (filePath: string): Promise<boolean> =>
       invoke(IPC_CHANNELS.BACKUP_RESTORE, filePath)
+  },
+
+  // Onboarding & Setup
+  onboarding: {
+    getStatus: (): Promise<OnboardingStatus> =>
+      invoke(IPC_CHANNELS.ONBOARDING_GET_STATUS),
+    saveDraft: (draft: OnboardingDraft): Promise<boolean> =>
+      invoke(IPC_CHANNELS.ONBOARDING_SAVE_DRAFT, draft),
+    getDraft: (): Promise<OnboardingDraft | null> =>
+      invoke(IPC_CHANNELS.ONBOARDING_GET_DRAFT),
+    clearDraft: (): Promise<boolean> =>
+      invoke(IPC_CHANNELS.ONBOARDING_CLEAR_DRAFT),
+    getModuleDefinitions: (businessId?: string): Promise<ModuleDefinitionWithEnables[]> =>
+      invoke(IPC_CHANNELS.ONBOARDING_GET_MODULE_DEFINITIONS, businessId),
+    complete: (payload: OnboardingPayload): Promise<{ businessId: string; branchId: string; counterId: string; userId: string }> =>
+      invoke(IPC_CHANNELS.ONBOARDING_COMPLETE, payload),
+    updateModuleStatus: (params: { businessId: string; moduleCode: string; isEnabled: boolean }): Promise<boolean> =>
+      invoke(IPC_CHANNELS.ONBOARDING_UPDATE_MODULE, params)
+  },
+
+  // Modules & Optional Framework
+  modules: {
+    getNavigation: (businessId: string, userPermissions: string[] = []): Promise<any[]> =>
+      invoke(IPC_CHANNELS.MODULES_GET_NAVIGATION, { businessId, userPermissions }),
+    listAll: (): Promise<any[]> =>
+      invoke(IPC_CHANNELS.MODULES_LIST),
+    getStatusList: (businessId: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.MODULES_STATUS_LIST, { businessId }),
+    enable: (businessId: string, moduleCode: string, userId?: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.MODULES_ENABLE, { businessId, moduleCode, userId }),
+    disable: (businessId: string, moduleCode: string, userId?: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.MODULES_DISABLE, { businessId, moduleCode, userId }),
+    getEvents: (businessId: string, moduleCode?: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.MODULES_EVENTS, { businessId, moduleCode })
+  },
+
+  // Product Catalogue (Prompt 6)
+  catalogue: {
+    createProduct: (dto: any, userId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_CREATE, { dto, userId }),
+    updateProduct: (id: string, dto: any, userId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_UPDATE, { id, dto, userId }),
+    archiveProduct: (businessId: string, id: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.PRODUCTS_ARCHIVE, { businessId, id }),
+    deleteProduct: (businessId: string, id: string): Promise<boolean> =>
+      invoke(IPC_CHANNELS.PRODUCTS_DELETE, { businessId, id }),
+    duplicateProduct: (businessId: string, id: string, newSku: string, newName?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_DUPLICATE, { businessId, id, newSku, newName }),
+    searchProducts: (params: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_SEARCH, params),
+    getProductById: (businessId: string, id: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_GET_BY_ID, { businessId, id }),
+    listCategories: (businessId: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.PRODUCTS_LIST_CATEGORIES, { businessId }),
+    createCategory: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_CREATE_CATEGORY, dto),
+    updateCategory: (id: string, businessId: string, dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_UPDATE_CATEGORY, { id, businessId, dto }),
+    listBrands: (businessId: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.PRODUCTS_LIST_BRANDS, { businessId }),
+    createBrand: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_CREATE_BRAND, dto),
+    setPrice: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PRODUCTS_SET_PRICE, dto),
+    getPrices: (businessId: string, productId: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.PRODUCTS_GET_PRICES, { businessId, productId })
+  },
+
+  // Units & Unit Conversions (Prompt 7)
+  units: {
+    listUnits: (businessId?: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.UNITS_LIST, { businessId }),
+    createUnit: (dto: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_CREATE, { dto, actor }),
+    getConversions: (productId: string | number): Promise<any[]> =>
+      invoke(IPC_CHANNELS.UNITS_GET_CONVERSIONS, { productId }),
+    saveConversion: (dto: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_SAVE_CONVERSION, { dto, actor }),
+    convertToBase: (productId: string | number, enteredQuantity: number, enteredUnitId: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_CONVERT_TO_BASE, { productId, enteredQuantity, enteredUnitId }),
+    convertFromBase: (productId: string | number, baseQuantity: number, targetUnitId: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_CONVERT_FROM_BASE, { productId, baseQuantity, targetUnitId }),
+    convertPrice: (productId: string | number, fromUnitId: string | number, toUnitId: string | number, priceMinor: number, roundingMode?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_CONVERT_PRICE, { productId, fromUnitId, toUnitId, priceMinor, roundingMode }),
+    calculateReturn: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.UNITS_CALCULATE_RETURN, payload)
+  },
+
+  // Barcodes & Scale Profiles (Prompt 8)
+  barcodes: {
+    lookup: (businessId: string, barcode: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BARCODES_LOOKUP, { businessId, barcode }),
+    addBarcode: (dto: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BARCODES_ADD, { dto, actor }),
+    setPrimary: (businessId: string, productId: string | number, barcodeId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BARCODES_SET_PRIMARY, { businessId, productId, barcodeId }),
+    deactivate: (businessId: string, barcodeId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BARCODES_DEACTIVATE, { businessId, barcodeId }),
+    listProductBarcodes: (productId: string | number): Promise<any[]> =>
+      invoke(IPC_CHANNELS.BARCODES_LIST_PRODUCT, { productId }),
+    listScaleProfiles: (businessId: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.SCALE_PROFILES_LIST, { businessId }),
+    createScaleProfile: (dto: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SCALE_PROFILES_CREATE, { dto, actor }),
+    testScaleProfile: (barcode: string, profileIdOrProfile: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SCALE_PROFILES_TEST, { barcode, profileIdOrProfile })
+  },
+
+  stockLocations: {
+    list: (payload?: { businessId?: string; branchId?: string; includeInactive?: boolean }): Promise<any[]> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_LIST, payload),
+    getById: (id: string, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_GET_BY_ID, { id, businessId }),
+    create: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_CREATE, { dto, actor }),
+    update: (id: string, dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_UPDATE, { id, dto, actor }),
+    archive: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_ARCHIVE, { id, actor }),
+    getStock: (locationId: string, businessId?: string, filter?: any): Promise<any[]> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_GET_STOCK, { locationId, businessId, filter }),
+    getProductStock: (productId: string | number, businessId?: string): Promise<any[]> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_GET_PRODUCT_STOCK, { productId, businessId }),
+    transfer: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_TRANSFER, { dto, actor }),
+    getMovements: (locationId: string, businessId?: string, limit?: number): Promise<any[]> =>
+      invoke(IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, { locationId, businessId, limit })
   }
 };
 

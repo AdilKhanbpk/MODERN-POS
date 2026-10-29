@@ -10,18 +10,20 @@ import {
 
 export interface IProductRepository {
   list(): Product[];
-  findById(id: number): Product | null;
+  findById(id: number | string): Product | null;
   findByBarcode(barcode: string): Product | null;
   search(query: string): Product[];
-  create(product: Partial<Product>): number;
+  create(product: Partial<Product>): number | string;
   update(product: Product): void;
-  delete(id: number): void;
+  delete(id: number | string): void;
 
   // Variants & conversions
-  addVariant(variant: Partial<ProductVariant>): number;
-  getProductVariants(productId: number): ProductVariant[];
-  addBarcode(productId: number, barcode: string, unitId: number, variantId?: number): void;
-  getProductBarcodes(productId: number): ProductBarcode[];
-  setUnitConversion(productId: number, unitId: number, numerator: number, denominator?: number): void;
-  getProductUnitConversions(productId: number): ProductUnitConversion[];
+  addVariant(variant: any): number | string;
+  getProductVariants(productId: number | string): ProductVariant[];
+  addBarcode(productId: number | string, barcode: string, unitId: number | string, variantId?: number | string): void;
+  getProductBarcodes(productId: number | string): ProductBarcode[];
+  setUnitConversion(productId: number | string, unitId: number | string, numerator: number, denominator?: number): void;
+  getProductUnitConversions(productId: number | string): ProductUnitConversion[];
+  updateStock?(id: number | string, newStock: number): void;
+  logStockMovement?(movement: any): void;
 }

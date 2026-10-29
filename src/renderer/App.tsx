@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './state/AuthContext';
 import { LoginModal } from './components/LoginModal';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { MainLayout } from './layouts/MainLayout';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { SalesPage } from './pages/sales/SalesPage';
@@ -17,6 +18,26 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('sales'); // Default directly into POS register
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean | null>(null);
+
+  // Check onboarding status on initial startup
+  useEffect(() => {
+    async function checkOnboarding() {
+      try {
+        if (window.posApi?.onboarding) {
+          const status = await window.posApi.onboarding.getStatus();
+          setIsOnboardingCompleted(status.isCompleted);
+        } else {
+          // Fallback if not in Electron context
+          setIsOnboardingCompleted(true);
+        }
+      } catch (err) {
+        console.error('Failed to verify onboarding status:', err);
+        setIsOnboardingCompleted(true);
+      }
+    }
+    checkOnboarding();
+  }, []);
 
   // Global POS keyboard shortcuts
   useEffect(() => {
@@ -40,12 +61,17 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (loading) {
+  if (isOnboardingCompleted === null || loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white font-mono text-sm">
         <div className="animate-pulse">Loading Secure Offline POS Terminal...</div>
       </div>
     );
+  }
+
+  // Do not show the main POS screen until initial setup is completed
+  if (!isOnboardingCompleted) {
+    return <OnboardingWizard onComplete={() => setIsOnboardingCompleted(true)} />;
   }
 
   if (!user) {

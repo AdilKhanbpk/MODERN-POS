@@ -62,15 +62,19 @@ class CustomerRepository {
         const code = customer.customerCode || `CUST-${Date.now().toString().slice(-4)}`;
         const limit = customer.creditLimitMinor || customer.creditLimit || 0;
         const opening = customer.openingBalanceMinor || 0;
-        const info = this.db.prepare(`
-      INSERT INTO customers (customer_code, name, phone, email, address, balance, credit_limit, credit_limit_minor, is_active)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-    `).run(code, customer.name, customer.phone, customer.email || null, customer.address || null, limit, limit, customer.isActive !== false ? 1 : 0);
-        const customerId = Number(info.lastInsertRowid);
+        const nextNumericId = () => {
+            const row = this.db.prepare('SELECT MAX(CAST(id AS INTEGER)) as maxId FROM customers').get();
+            return (row?.maxId || 0) + 1;
+        };
+        const customerId = customer.id !== undefined ? customer.id : nextNumericId();
+        this.db.prepare(`
+      INSERT INTO customers (id, customer_code, name, phone, email, address, balance, credit_limit, credit_limit_minor, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).run(customerId, code, customer.name, customer.phone, customer.email || null, customer.address || null, limit, limit, customer.isActive !== false ? 1 : 0);
         if (opening !== 0) {
             // Record dated opening balance ledger entry
             this.addLedgerEntry({
-                customerId,
+                customerId: customerId,
                 entryType: 'OPENING_BALANCE',
                 debitMinor: opening > 0 ? opening : 0,
                 creditMinor: opening < 0 ? Math.abs(opening) : 0,

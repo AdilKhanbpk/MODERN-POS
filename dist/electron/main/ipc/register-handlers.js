@@ -12,6 +12,18 @@ const PayrollService_1 = require("../../../src/application/services/PayrollServi
 const ReportService_1 = require("../../../src/application/services/ReportService");
 const BackupService_1 = require("../../../src/application/services/BackupService");
 const SettingsService_1 = require("../../../src/application/services/SettingsService");
+const OnboardingService_1 = require("../../../src/application/services/OnboardingService");
+const ApprovalService_1 = require("../../../src/application/services/ApprovalService");
+const RbacService_1 = require("../../../src/application/authorization/RbacService");
+const ModuleManager_1 = require("../../../src/application/modules/ModuleManager");
+const ModuleRegistry_1 = require("../../../src/application/modules/ModuleRegistry");
+const ProductCatalogService_1 = require("../../../src/application/services/ProductCatalogService");
+const UnitConversionService_1 = require("../../../src/application/services/UnitConversionService");
+const BarcodeService_1 = require("../../../src/application/services/BarcodeService");
+const CustomerService_1 = require("../../../src/application/services/CustomerService");
+const SupplierService_1 = require("../../../src/application/services/SupplierService");
+const StockLocationService_1 = require("../../../src/application/services/StockLocationService");
+const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
 const thermal_printer_1 = require("../printing/thermal-printer");
@@ -26,9 +38,19 @@ function registerIpcHandlers() {
     const reportService = new ReportService_1.ReportService();
     const backupService = new BackupService_1.BackupService();
     const settingsService = new SettingsService_1.SettingsService();
+    const onboardingService = new OnboardingService_1.OnboardingService();
+    const approvalService = new ApprovalService_1.ApprovalService();
+    const rbacService = new RbacService_1.RbacService();
     const customerRepo = new CustomerRepository_1.CustomerRepository();
     const supplierRepo = new SupplierRepository_1.SupplierRepository();
     const printerService = new thermal_printer_1.ThermalPrinterService();
+    const moduleManager = new ModuleManager_1.ModuleManager((0, connection_1.getDatabase)(), ModuleRegistry_1.defaultModuleRegistry);
+    const productCatalogService = new ProductCatalogService_1.ProductCatalogService((0, connection_1.getDatabase)());
+    const unitConversionService = new UnitConversionService_1.UnitConversionService((0, connection_1.getDatabase)());
+    const barcodeService = new BarcodeService_1.BarcodeService((0, connection_1.getDatabase)());
+    const customerService = new CustomerService_1.CustomerService((0, connection_1.getDatabase)());
+    const supplierService = new SupplierService_1.SupplierService((0, connection_1.getDatabase)());
+    const stockLocationService = new StockLocationService_1.StockLocationService((0, connection_1.getDatabase)());
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -45,7 +67,18 @@ function registerIpcHandlers() {
     // --- Auth Handlers ---
     handle(ipc_channels_1.IPC_CHANNELS.AUTH_LOGIN, (payload) => {
         const validated = schemas_1.LoginSchema.parse(payload);
-        return authService.login(validated.username, validated.password);
+        return authService.login({
+            username: validated.username,
+            passwordPlain: validated.password,
+            deviceIdentifier: payload.deviceIdentifier
+        });
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_VERIFY_SESSION, (sessionToken) => {
+        return authService.verifySession(sessionToken);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_LOGOUT, (sessionToken) => {
+        authService.logout(sessionToken);
+        return true;
     });
     handle(ipc_channels_1.IPC_CHANNELS.AUTH_GET_CURRENT_USER, () => {
         return authService.getCurrentUser();
@@ -59,6 +92,48 @@ function registerIpcHandlers() {
     handle(ipc_channels_1.IPC_CHANNELS.AUTH_UPDATE_PASSWORD, (payload) => {
         authService.updatePassword(payload.userId, payload.newPassword);
         return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_CHANGE_PASSWORD, (payload) => {
+        authService.changePassword(payload.userId, payload.currentPasswordPlain, payload.newPasswordPlain);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_ADMIN_RESET_PASSWORD, (payload) => {
+        const adminContext = authService.verifySession(payload.sessionToken);
+        authService.adminResetPassword(payload.targetUserId, payload.newPasswordPlain, adminContext);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_REVOKE_SESSION, (payload) => {
+        const adminContext = authService.verifySession(payload.sessionToken);
+        authService.revokeAllUserSessions(payload.sessionId, adminContext);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_REVOKE_ALL_SESSIONS, (payload) => {
+        const adminContext = authService.verifySession(payload.sessionToken);
+        authService.revokeAllUserSessions(payload.userId, adminContext);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.AUTH_GET_PERMISSIONS, (payload) => {
+        return Array.from(rbacService.getUserPermissions(payload.userId, payload.businessId));
+    });
+    // --- Approvals Handlers ---
+    handle(ipc_channels_1.IPC_CHANNELS.APPROVALS_REQUEST, (payload) => {
+        const context = authService.verifySession(payload.sessionToken);
+        return approvalService.createRequest(context, payload.request);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.APPROVALS_DECIDE, (payload) => {
+        const context = authService.verifySession(payload.sessionToken);
+        return approvalService.decideRequest(context, {
+            requestId: payload.requestId,
+            decision: payload.decision,
+            reason: payload.reason
+        });
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.APPROVALS_LIST_PENDING, (payload) => {
+        const context = authService.verifySession(payload.sessionToken);
+        return approvalService.listPending(context, payload.branchId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.APPROVALS_GET_REQUEST, (requestId) => {
+        return approvalService.getRequest(requestId);
     });
     // --- Sales & POS Handlers ---
     handle(ipc_channels_1.IPC_CHANNELS.SALES_CALCULATE, (payload) => {
@@ -103,40 +178,100 @@ function registerIpcHandlers() {
         return inventoryService.createCategory(payload.name, payload.description);
     });
     // --- Customers Handlers ---
-    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_LIST, () => {
-        return customerRepo.list();
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_LIST, (options) => {
+        const businessId = options?.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.listCustomers(businessId, options);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_GET_BY_ID, (payload) => {
+        const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.getCustomerById(businessId, payload.id);
     });
     handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_SEARCH, (query) => {
-        return customerRepo.search(query);
+        return customerService.listCustomers('00000000-0000-0000-0000-000000000001', { query });
     });
     handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_SAVE, (payload) => {
-        const validated = schemas_1.CustomerSchema.parse(payload);
-        return customerRepo.create(validated);
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return customerService.createCustomer(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_UPDATE, (payload) => {
+        const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+        return customerService.updateCustomer(payload.id, payload.dto, actor);
     });
     handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_GET_LEDGER, (customerId) => {
-        return customerRepo.getLedger(customerId);
+        return customerRepo.getLedger(Number(customerId));
     });
     handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_RECORD_PAYMENT, (payload) => {
-        accountService.recordCustomerPayment(payload);
-        return true;
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return customerService.recordCustomerPayment(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_CHECK_CREDIT, (payload) => {
+        const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.checkCreditExposure(businessId, payload.customerId, payload.newCreditMinor, payload.hasApproval);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_STATEMENT, (payload) => {
+        const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.getCustomerStatement(businessId, payload.customerId, payload.fromDate, payload.toDate);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_OUTSTANDING_INVOICES, (payload) => {
+        const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.getOutstandingInvoices(businessId, payload.customerId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_ALLOCATE_PAYMENT, (payload) => {
+        const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+        return customerService.allocatePayment(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.CUSTOMERS_RECONCILE, (payload) => {
+        const businessId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return customerService.reconcileCustomerBalance(businessId, payload.customerId);
     });
     // --- Suppliers Handlers ---
-    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_LIST, () => {
-        return supplierRepo.list();
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_LIST, (payload) => {
+        return supplierService.listSuppliers(payload?.businessId, payload?.filter);
     });
-    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_SEARCH, (query) => {
-        return supplierRepo.search(query);
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_GET_BY_ID, (payload) => {
+        return supplierService.getSupplierById(payload.id, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_SEARCH, (payload) => {
+        const query = typeof payload === 'string' ? payload : payload.query;
+        const bizId = typeof payload === 'object' ? payload.businessId : undefined;
+        return supplierService.listSuppliers(bizId, { query });
     });
     handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_SAVE, (payload) => {
-        const validated = schemas_1.SupplierSchema.parse(payload);
-        return supplierRepo.create(validated);
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return supplierService.createSupplier(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_UPDATE, (payload) => {
+        const actor = { userId: 1, role: 'owner', businessId: payload.businessId };
+        return supplierService.updateSupplier(payload.id, payload.dto, actor);
     });
     handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_GET_LEDGER, (supplierId) => {
         return supplierRepo.getLedger(supplierId);
     });
     handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_RECORD_PAYMENT, (payload) => {
-        accountService.recordSupplierPayment(payload);
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return supplierService.recordSupplierPayment(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_REVERSE_PAYMENT, (payload) => {
+        const actor = { userId: payload.userId || 1, role: 'owner' };
+        supplierService.reverseSupplierPayment(payload.paymentId, payload.reason, actor);
         return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_STATEMENT, (payload) => {
+        return supplierService.getSupplierStatement(payload.supplierId, payload.fromDate, payload.toDate, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_OUTSTANDING_INVOICES, (payload) => {
+        return supplierService.getOutstandingPurchaseInvoices(payload.supplierId, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_RECORD_RETURN, (payload) => {
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return supplierService.recordSupplierReturn(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_RECORD_ADJUSTMENT, (payload) => {
+        const actor = { userId: payload.userId || 1, role: 'owner', businessId: payload.businessId };
+        return supplierService.recordAdjustment(payload, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SUPPLIERS_RECONCILE, (payload) => {
+        return supplierService.reconcileSupplierBalance(payload.supplierId);
     });
     // --- Accounts Handlers ---
     handle(ipc_channels_1.IPC_CHANNELS.ACCOUNTS_LIST, () => {
@@ -211,5 +346,188 @@ function registerIpcHandlers() {
     });
     handle(ipc_channels_1.IPC_CHANNELS.BACKUP_RESTORE, (filePath) => {
         return backupService.restoreBackup(filePath);
+    });
+    // --- Onboarding Handlers ---
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_GET_STATUS, () => {
+        return onboardingService.getStatus();
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_SAVE_DRAFT, (draft) => {
+        onboardingService.saveDraft(draft);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_GET_DRAFT, () => {
+        return onboardingService.getDraft();
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_CLEAR_DRAFT, () => {
+        onboardingService.clearDraft();
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_GET_MODULE_DEFINITIONS, (businessId) => {
+        return onboardingService.getModuleDefinitions(businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_COMPLETE, (payload) => {
+        return onboardingService.completeOnboarding(payload);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.ONBOARDING_UPDATE_MODULE, (params) => {
+        onboardingService.updateModuleStatus(params.businessId, params.moduleCode, params.isEnabled);
+        return true;
+    });
+    // --- Module Management & Framework ---
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_GET_NAVIGATION, (params) => {
+        return moduleManager.getNavigation(params.businessId, params.userPermissions || []);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_LIST, () => {
+        return ModuleRegistry_1.defaultModuleRegistry.getAllModules();
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_STATUS_LIST, (params) => {
+        return moduleManager.getModuleStatusList(params.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_ENABLE, (params) => {
+        moduleManager.enableModule(params.businessId, params.moduleCode, params.userId);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_DISABLE, (params) => {
+        moduleManager.disableModule(params.businessId, params.moduleCode, params.userId);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.MODULES_EVENTS, (params) => {
+        return moduleManager.getModuleEvents(params.businessId, params.moduleCode);
+    });
+    // --- Product Catalogue Handlers (Prompt 6) ---
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_CREATE, (payload) => {
+        return productCatalogService.createProduct(payload.dto, payload.userId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_UPDATE, (payload) => {
+        return productCatalogService.updateProduct(payload.id, payload.dto, payload.userId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_ARCHIVE, (payload) => {
+        productCatalogService.archiveProduct(payload.businessId, payload.id);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_DELETE, (payload) => {
+        productCatalogService.deleteProduct(payload.businessId, payload.id);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_DUPLICATE, (payload) => {
+        return productCatalogService.duplicateProduct(payload.businessId, payload.id, payload.newSku, payload.newName);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_SEARCH, (params) => {
+        return productCatalogService.searchProducts(params);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_GET_BY_ID, (payload) => {
+        return productCatalogService.getProductById(payload.businessId, payload.id);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_LIST_CATEGORIES, (payload) => {
+        return productCatalogService.listCategories(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_CREATE_CATEGORY, (dto) => {
+        return productCatalogService.createCategory(dto);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_UPDATE_CATEGORY, (payload) => {
+        return productCatalogService.updateCategory(payload.id, payload.businessId, payload.dto);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_LIST_BRANDS, (payload) => {
+        return productCatalogService.listBrands(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_CREATE_BRAND, (dto) => {
+        return productCatalogService.createBrand(dto);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_SET_PRICE, (dto) => {
+        return productCatalogService.createProductPrice(dto);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PRODUCTS_GET_PRICES, (payload) => {
+        return productCatalogService.getProductPrices(payload.businessId, payload.productId);
+    });
+    // Units & Conversions (Prompt 7)
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_LIST, (payload) => {
+        return unitConversionService.listUnits(payload?.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_CREATE, (payload) => {
+        return unitConversionService.createUnit(payload.dto, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_GET_CONVERSIONS, (payload) => {
+        return unitConversionService.getProductConversions(payload.productId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_SAVE_CONVERSION, (payload) => {
+        return unitConversionService.saveProductUnitConversion(payload.dto, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_CONVERT_TO_BASE, (payload) => {
+        return unitConversionService.convertToBaseQuantity(payload.productId, payload.enteredQuantity, payload.enteredUnitId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_CONVERT_FROM_BASE, (payload) => {
+        return unitConversionService.convertFromBaseQuantity(payload.productId, payload.baseQuantity, payload.targetUnitId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_CONVERT_PRICE, (payload) => {
+        return unitConversionService.convertUnitPrice(payload.productId, payload.fromUnitId, payload.toUnitId, payload.priceMinor, payload.roundingMode);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.UNITS_CALCULATE_RETURN, (payload) => {
+        return unitConversionService.calculateSaleReturn(payload);
+    });
+    // Barcodes & Scale Profiles (Prompt 8)
+    handle(ipc_channels_1.IPC_CHANNELS.BARCODES_LOOKUP, (payload) => {
+        return barcodeService.lookupBarcode(payload.businessId, payload.barcode);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.BARCODES_ADD, (payload) => {
+        return barcodeService.addBarcode(payload.dto, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.BARCODES_SET_PRIMARY, (payload) => {
+        return barcodeService.setPrimaryBarcode(payload.businessId, payload.productId, payload.barcodeId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.BARCODES_DEACTIVATE, (payload) => {
+        return barcodeService.deactivateBarcode(payload.businessId, payload.barcodeId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.BARCODES_LIST_PRODUCT, (payload) => {
+        return barcodeService.listProductBarcodes(payload.productId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SCALE_PROFILES_LIST, (payload) => {
+        return barcodeService.listScaleProfiles(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SCALE_PROFILES_CREATE, (payload) => {
+        return barcodeService.createScaleProfile(payload.dto, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.SCALE_PROFILES_TEST, (payload) => {
+        return barcodeService.testScaleBarcodeDiagnostic(payload.barcode, payload.profileIdOrProfile);
+    });
+    // --- Stock Locations Handlers (Prompt 11) ---
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_LIST, (payload) => {
+        const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockLocationService.getLocations(bizId, payload?.branchId, payload?.includeInactive);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_GET_BY_ID, (payload) => {
+        const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockLocationService.getLocationById(payload.id, bizId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_CREATE, (payload) => {
+        const bizId = payload.dto.businessId || '00000000-0000-0000-0000-000000000001';
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+        return stockLocationService.createLocation({ ...payload.dto, businessId: bizId }, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_UPDATE, (payload) => {
+        const bizId = payload.dto?.businessId || '00000000-0000-0000-0000-000000000001';
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+        return stockLocationService.updateLocation(payload.id, payload.dto, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_ARCHIVE, (payload) => {
+        const bizId = payload.actor?.businessId || '00000000-0000-0000-0000-000000000001';
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+        stockLocationService.archiveLocation(payload.id, actor);
+        return true;
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_GET_STOCK, (payload) => {
+        const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockLocationService.getLocationStock(payload.locationId, bizId, payload.filter);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_GET_PRODUCT_STOCK, (payload) => {
+        const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockLocationService.getProductStockByLocations(payload.productId, bizId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_TRANSFER, (payload) => {
+        const bizId = payload.dto.businessId || '00000000-0000-0000-0000-000000000001';
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: bizId };
+        return stockLocationService.transferStock({ ...payload.dto, businessId: bizId }, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, (payload) => {
+        const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockLocationService.getLocationMovements(payload.locationId, bizId, payload.limit);
     });
 }

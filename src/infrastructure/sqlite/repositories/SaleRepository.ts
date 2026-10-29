@@ -28,7 +28,7 @@ export class SaleRepository implements ISaleRepository {
 
   public create(sale: {
     invoiceNumber: string;
-    customerId?: number;
+    customerId?: number | string;
     cashierId: number;
     locationId?: number;
     registerId?: number;
@@ -96,8 +96,8 @@ export class SaleRepository implements ISaleRepository {
    * never corrupt or alter previously posted bills.
    */
   public createItem(item: {
-    saleId: number;
-    productId: number;
+    saleId: number | string;
+    productId: number | string;
     variantId?: number;
     productName: string;
     productSku?: string;

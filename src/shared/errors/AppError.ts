@@ -16,6 +16,8 @@ export type ErrorCode =
   | 'QUANTITY_SCALE_ERROR'
   | 'DATABASE_ERROR'
   | 'HARDWARE_ERROR'
+  | 'CIRCULAR_DEPENDENCY'
+  | 'MODULE_DISABLED'
   | 'BUSINESS_RULE_ERROR';
 
 export interface SerializedAppError {
@@ -60,14 +62,14 @@ export class ValidationError extends AppError {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message = 'Authentication required') {
-    super(message, 'UNAUTHORIZED', 401);
+  constructor(message = 'Authentication required', details?: any) {
+    super(message, 'UNAUTHORIZED', 401, details);
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message = 'Access forbidden: Insufficient role permissions') {
-    super(message, 'FORBIDDEN', 403);
+  constructor(message = 'Access forbidden: Insufficient role permissions', details?: any) {
+    super(message, 'FORBIDDEN', 403, details);
   }
 }
 
@@ -101,6 +103,12 @@ export class BusinessRuleViolationError extends AppError {
 export class IdempotencyConflictError extends AppError {
   constructor(key: string) {
     super(`Duplicate request detected for idempotency key "${key}".`, 'IDEMPOTENCY_VIOLATION', 409, { key });
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 'DATABASE_ERROR', 409, details);
   }
 }
 

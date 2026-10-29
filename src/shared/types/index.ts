@@ -3,6 +3,13 @@ import { PaymentMethod, SaleStatus, StockMovementType, AccountType } from '../co
 
 export { Role, Permission, PaymentMethod, SaleStatus, StockMovementType, AccountType };
 export * from './enterprise-core';
+export * from './onboarding';
+export * from './auth-security';
+export * from './product-catalogue';
+export * from './unit-conversion';
+export * from './barcode';
+export * from './customer';
+export * from './supplier';
 
 // -------------------------------------------------------------
 // GROUP A: Business Settings, Security & Sequences
@@ -686,18 +693,18 @@ export interface JournalEntry {
 // -------------------------------------------------------------
 
 export interface CartItemInput {
-  productId: number;
+  productId: number | string;
   variantId?: number;
   unitId?: number;
-  unitName: string;
+  unitName?: string;
   quantity: number;
   conversionFactor: number;
   unitPrice: number;
-  costPrice: number;
-  discountPercent: number;
-  discountAmount: number;
-  taxRate: number;
-  isTaxInclusive: boolean;
+  costPrice?: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  taxRate?: number;
+  isTaxInclusive?: boolean;
 }
 
 export interface SaleCalculationResult {
@@ -713,6 +720,8 @@ export interface SaleCalculationResult {
   items: Array<CartItemInput & {
     lineGross: number;
     lineDiscount: number;
+    itemDiscount?: number;
+    allocatedBillDiscount?: number;
     lineNet: number;
     lineTax: number;
     lineTotal: number;
@@ -723,15 +732,18 @@ export interface SaleCalculationResult {
 
 export interface CreateSaleRequest {
   idempotencyKey?: string;
-  customerId?: number;
+  customerId?: number | string;
   cashierId: number;
-  locationId?: number;
+  branchId?: string;
+  counterId?: string;
+  locationId?: number | string;
   registerId?: number;
   items: CartItemInput[];
   orderDiscountPercent?: number;
   orderDiscountAmount?: number;
-  paymentMethod: PaymentMethod | string;
+  paymentMethod?: PaymentMethod | string;
   amountPaid: number;
+  isCredit?: boolean;
   splitPayments?: Array<{ method: PaymentMethod; amount: number }>;
   notes?: string;
 }
@@ -757,7 +769,7 @@ export interface PurchaseOrderItemInput {
   productId: number;
   variantId?: number;
   unitId?: number;
-  unitName: string;
+  unitName?: string;
   quantity: number;
   conversionFactor: number;
   unitCostPrice: number;
@@ -766,13 +778,15 @@ export interface PurchaseOrderItemInput {
 }
 
 export interface CreatePurchaseOrderRequest {
-  supplierId: number;
+  supplierId: number | string;
   invoiceNumber: string;
   locationId?: number;
   notes?: string;
   items: PurchaseOrderItemInput[];
   additionalCost: number;
   amountPaid: number;
+  paymentMethod?: string;
+  isCredit?: boolean;
 }
 
 export interface StockAdjustmentRequest {
@@ -819,3 +833,6 @@ export interface DailyZReport {
   customerCreditSales: number;
   customerCreditPaymentsReceived: number;
 }
+
+export * from './stock-location';
+

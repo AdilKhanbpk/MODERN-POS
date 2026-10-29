@@ -353,26 +353,25 @@ function applyMigrationV4(db) {
       CREATE INDEX IF NOT EXISTS idx_audit_biz ON new_audit_logs(business_id);
       CREATE INDEX IF NOT EXISTS idx_audit_entity ON new_audit_logs(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_audit_created ON new_audit_logs(created_at);
+
+      -- Append-only security triggers: prohibit DELETE and UPDATE
+      CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete
+      BEFORE DELETE ON new_audit_logs
+      BEGIN
+        SELECT RAISE(ABORT, 'Audit log records are append-only and cannot be deleted.');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update
+      BEFORE UPDATE ON new_audit_logs
+      BEGIN
+        SELECT RAISE(ABORT, 'Audit log records are immutable and cannot be updated.');
+      END;
     `);
         const hasAuditTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'").get();
         if (hasAuditTable) {
             db.exec('DROP TABLE audit_logs;');
         }
         db.exec('ALTER TABLE new_audit_logs RENAME TO audit_logs;');
-        // Append-only security triggers: prohibit DELETE and UPDATE on audit_logs
-        db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete
-      BEFORE DELETE ON audit_logs
-      BEGIN
-        SELECT RAISE(ABORT, 'Audit log records are append-only and cannot be deleted.');
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update
-      BEFORE UPDATE ON audit_logs
-      BEGIN
-        SELECT RAISE(ABORT, 'Audit log records are immutable and cannot be updated.');
-      END;
-    `);
         // -----------------------------------------------------------------------
         // 14. RECORD MIGRATION 4
         // -----------------------------------------------------------------------

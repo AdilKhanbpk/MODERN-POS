@@ -6,14 +6,14 @@ export class PurchaseRepository {
   constructor(private db: Database.Database = getDatabase()) {}
 
   public create(po: {
-    supplierId: number;
+    supplierId: number | string;
     invoiceNumber: string;
     locationId?: number;
     subtotal: number;
     additionalCost: number;
     grandTotal: number;
     amountPaid: number;
-    createdBy?: number;
+    createdBy?: number | string;
     notes?: string;
   }): number {
     const locId = po.locationId || 1;
@@ -59,6 +59,7 @@ export class PurchaseRepository {
 
   public createItem(poId: number, item: PurchaseOrderItemInput): void {
     const unitId = item.unitId || 1;
+    const unitName = item.unitName || 'Piece';
 
     // Insert legacy
     this.db.prepare(`
@@ -67,7 +68,7 @@ export class PurchaseRepository {
     `).run(
       poId,
       item.productId,
-      item.unitName,
+      unitName,
       item.quantity,
       item.conversionFactor,
       item.unitCostPrice,

@@ -2,7 +2,7 @@ import { Supplier, SupplierLedgerEntry } from '../../types';
 
 export interface ISupplierRepository {
   list(): Supplier[];
-  findById(id: number): Supplier | null;
+  findById(id: number | string): Supplier | null;
   search(query: string): Supplier[];
   create(supplier: {
     supplierCode?: string;
@@ -13,9 +13,9 @@ export interface ISupplierRepository {
     address?: string;
     openingBalanceMinor?: number;
     isActive?: boolean;
-  }): number;
+  }): number | string;
   addLedgerEntry(entry: {
-    supplierId: number;
+    supplierId: number | string;
     entryType?: string;
     transactionType?: string;
     debitMinor?: number;
@@ -24,17 +24,17 @@ export interface ISupplierRepository {
     credit?: number;
     runningBalance?: number;
     sourceType?: string;
-    sourceId?: number;
-    referenceId?: number;
+    sourceId?: number | string;
+    referenceId?: number | string;
     notes?: string;
-  }): number;
-  calculateLedgerBalance(supplierId: number): number;
-  reconcileBalance(supplierId: number): {
+  }): number | string;
+  calculateLedgerBalance(supplierId: number | string): number;
+  reconcileBalance(supplierId: number | string): {
     isReconciled: boolean;
     cachedBalance: number;
     ledgerBalance: number;
     discrepancy: number;
   };
-  getLedger(supplierId: number): SupplierLedgerEntry[];
+  getLedger(supplierId: number | string): SupplierLedgerEntry[];
 }
 

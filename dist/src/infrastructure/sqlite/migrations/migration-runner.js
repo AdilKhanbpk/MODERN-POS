@@ -11,6 +11,15 @@ const accounts_1 = require("../../../shared/constants/accounts");
 const _002_enterprise_schema_1 = require("./002_enterprise_schema");
 const _003_part3_scale_snapshots_1 = require("./003_part3_scale_snapshots");
 const _004_universal_enterprise_structure_1 = require("./004_universal_enterprise_structure");
+const _005_onboarding_module_catalog_1 = require("./005_onboarding_module_catalog");
+const _006_auth_sessions_and_approvals_1 = require("./006_auth_sessions_and_approvals");
+const _007_module_installations_and_events_1 = require("./007_module_installations_and_events");
+const _008_product_catalogue_enterprise_1 = require("./008_product_catalogue_enterprise");
+const _009_units_and_conversions_enterprise_1 = require("./009_units_and_conversions_enterprise");
+const _010_barcodes_and_scale_profiles_1 = require("./010_barcodes_and_scale_profiles");
+const _011_customer_management_and_credit_ledger_1 = require("./011_customer_management_and_credit_ledger");
+const _012_supplier_management_and_payable_ledger_1 = require("./012_supplier_management_and_payable_ledger");
+const _013_stock_locations_and_balances_1 = require("./013_stock_locations_and_balances");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -34,6 +43,33 @@ function runMigrations(db) {
     }
     if (currentVersion < 4) {
         (0, _004_universal_enterprise_structure_1.applyMigrationV4)(db);
+    }
+    if (currentVersion < 5) {
+        (0, _005_onboarding_module_catalog_1.applyMigrationV5)(db);
+    }
+    if (currentVersion < 6) {
+        (0, _006_auth_sessions_and_approvals_1.applyMigrationV6)(db);
+    }
+    if (currentVersion < 7) {
+        (0, _007_module_installations_and_events_1.applyMigrationV7)(db);
+    }
+    if (currentVersion < 8) {
+        (0, _008_product_catalogue_enterprise_1.applyMigrationV8)(db);
+    }
+    if (currentVersion < 9) {
+        (0, _009_units_and_conversions_enterprise_1.applyMigrationV9)(db);
+    }
+    if (currentVersion < 10) {
+        (0, _010_barcodes_and_scale_profiles_1.applyMigrationV10)(db);
+    }
+    if (currentVersion < 11) {
+        (0, _011_customer_management_and_credit_ledger_1.applyMigrationV11)(db);
+    }
+    if (currentVersion < 12) {
+        (0, _012_supplier_management_and_payable_ledger_1.applyMigrationV12)(db);
+    }
+    if (currentVersion < 13) {
+        (0, _013_stock_locations_and_balances_1.applyMigrationV13)(db);
     }
 }
 function applyMigrationV1(db) {

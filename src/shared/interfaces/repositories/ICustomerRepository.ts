@@ -2,7 +2,7 @@ import { Customer, CustomerLedgerEntry } from '../../types';
 
 export interface ICustomerRepository {
   list(): Customer[];
-  findById(id: number): Customer | null;
+  findById(id: number | string): Customer | null;
   search(query: string): Customer[];
   create(customer: {
     customerCode?: string;

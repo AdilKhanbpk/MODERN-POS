@@ -4,7 +4,7 @@ export interface ISaleRepository {
   getNextInvoiceNumber(): string;
   create(sale: {
     invoiceNumber: string;
-    customerId?: number;
+    customerId?: number | string;
     cashierId: number;
     locationId?: number;
     registerId?: number;
@@ -21,8 +21,8 @@ export interface ISaleRepository {
     notes?: string;
   }): number;
   createItem(item: {
-    saleId: number;
-    productId: number;
+    saleId: number | string;
+    productId: number | string;
     variantId?: number;
     productName: string;
     productSku?: string;

@@ -21,13 +21,13 @@ export class SupplierRepository implements ISupplierRepository {
     }));
   }
 
-  public findById(id: number): Supplier | null {
+  public findById(id: number | string): Supplier | null {
     const row = this.db.prepare(`
       SELECT id, supplier_code as supplierCode, name, contact_person as contactPerson,
              phone, email, address, balance, is_active as isActive, created_at as createdAt
       FROM suppliers
-      WHERE id = ?
-    `).get(id) as any;
+      WHERE id = ? OR supplier_code = ?
+    `).get(String(id), String(id)) as any;
 
     if (!row) return null;
     return {
@@ -56,6 +56,7 @@ export class SupplierRepository implements ISupplierRepository {
   }
 
   public create(supplier: {
+    id?: number | string;
     supplierCode?: string;
     name: string;
     contactPerson?: string;
@@ -64,14 +65,22 @@ export class SupplierRepository implements ISupplierRepository {
     address?: string;
     openingBalanceMinor?: number;
     isActive?: boolean;
-  }): number {
+  }): any {
     const code = supplier.supplierCode || `SUP-${Date.now().toString().slice(-4)}`;
     const opening = supplier.openingBalanceMinor || 0;
 
-    const info = this.db.prepare(`
-      INSERT INTO suppliers (supplier_code, name, contact_person, phone, email, address, balance, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+    const nextNumericId = () => {
+      const row = this.db.prepare('SELECT MAX(CAST(id AS INTEGER)) as maxId FROM suppliers').get() as { maxId: number | null };
+      return (row?.maxId || 0) + 1;
+    };
+
+    const supplierId = supplier.id !== undefined ? String(supplier.id) : String(nextNumericId());
+
+    this.db.prepare(`
+      INSERT INTO suppliers (id, supplier_code, name, contact_person, phone, email, address, balance, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     `).run(
+      supplierId,
       code,
       supplier.name,
       supplier.contactPerson || null,
@@ -80,8 +89,6 @@ export class SupplierRepository implements ISupplierRepository {
       supplier.address || null,
       supplier.isActive !== false ? 1 : 0
     );
-
-    const supplierId = Number(info.lastInsertRowid);
 
     if (opening !== 0) {
       // Record dated opening balance ledger entry
@@ -96,7 +103,7 @@ export class SupplierRepository implements ISupplierRepository {
       });
     }
 
-    return supplierId;
+    return !isNaN(Number(supplierId)) ? Number(supplierId) : supplierId;
   }
 
   /**
@@ -104,7 +111,7 @@ export class SupplierRepository implements ISupplierRepository {
    * updates the supplier's cached balance directly from the authoritative ledger sum.
    */
   public addLedgerEntry(entry: {
-    supplierId: number;
+    supplierId: number | string;
     entryType?: 'OPENING_BALANCE' | 'PURCHASE_BILL' | 'PAYMENT_DISBURSED' | 'PURCHASE_RETURN' | 'ADJUSTMENT' | string;
     transactionType?: string;
     debitMinor?: number;
@@ -113,10 +120,10 @@ export class SupplierRepository implements ISupplierRepository {
     credit?: number;
     runningBalance?: number;
     sourceType?: string;
-    sourceId?: number;
-    referenceId?: number;
+    sourceId?: number | string;
+    referenceId?: number | string;
     notes?: string;
-  }): number {
+  }): number | string {
     const entryType = entry.entryType || entry.transactionType || 'ADJUSTMENT';
     const debit = entry.debitMinor ?? entry.debit ?? 0;
     const credit = entry.creditMinor ?? entry.credit ?? 0;
@@ -125,17 +132,18 @@ export class SupplierRepository implements ISupplierRepository {
 
     const info = this.db.prepare(`
       INSERT INTO supplier_ledger_entries (
-        supplier_id, entry_type, debit_minor, credit_minor, source_type, source_id, notes
+        supplier_id, entry_type, debit_minor, credit_minor, source_type, source_id, notes, entry_date
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      entry.supplierId,
+      String(entry.supplierId),
       entryType,
       debit,
       credit,
       srcType,
-      srcId || null,
-      entry.notes || null
+      srcId ? String(srcId) : null,
+      entry.notes || null,
+      new Date().toISOString()
     );
 
     // Calculate authoritative balance directly from ledger sum (Credit - Debit)
@@ -149,33 +157,33 @@ export class SupplierRepository implements ISupplierRepository {
       INSERT INTO supplier_ledger (supplier_id, transaction_type, reference_id, debit, credit, running_balance, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      entry.supplierId,
+      String(entry.supplierId),
       entryType,
-      srcId || null,
+      srcId ? String(srcId) : null,
       debit,
       credit,
       authoritativeBalance,
       entry.notes || null
     );
 
-    return Number(info.lastInsertRowid);
+    return info.lastInsertRowid ? Number(info.lastInsertRowid) : 1;
   }
 
   /**
    * Authoritative source of truth:
    * Balance = Total Credits (Purchases/Payables) - Total Debits (Payments/Returns)
    */
-  public calculateLedgerBalance(supplierId: number): number {
+  public calculateLedgerBalance(supplierId: number | string): number {
     const row = this.db.prepare(`
       SELECT COALESCE(SUM(credit_minor - debit_minor), 0) as balance
       FROM supplier_ledger_entries
       WHERE supplier_id = ?
-    `).get(supplierId) as { balance: number };
+    `).get(String(supplierId)) as { balance: number };
 
-    return row.balance;
+    return row ? row.balance : 0;
   }
 
-  public reconcileBalance(supplierId: number): { isReconciled: boolean; cachedBalance: number; ledgerBalance: number; discrepancy: number } {
+  public reconcileBalance(supplierId: number | string): { isReconciled: boolean; cachedBalance: number; ledgerBalance: number; discrepancy: number } {
     const supplier = this.findById(supplierId);
     const cached = supplier ? supplier.balance : 0;
     const ledger = this.calculateLedgerBalance(supplierId);
@@ -189,13 +197,13 @@ export class SupplierRepository implements ISupplierRepository {
     };
   }
 
-  public updateBalance(supplierId: number, newBalance: number): void {
+  public updateBalance(supplierId: number | string, newBalance: number): void {
     this.db.prepare(`
       UPDATE suppliers SET balance = ? WHERE id = ?
-    `).run(newBalance, supplierId);
+    `).run(newBalance, String(supplierId));
   }
 
-  public getLedger(supplierId: number): SupplierLedgerEntry[] {
+  public getLedger(supplierId: number | string): SupplierLedgerEntry[] {
     const rows = this.db.prepare(`
       SELECT id, supplier_id as supplierId, entry_type as entryType,
              debit_minor as debitMinor, credit_minor as creditMinor,
@@ -204,7 +212,7 @@ export class SupplierRepository implements ISupplierRepository {
       FROM supplier_ledger_entries
       WHERE supplier_id = ?
       ORDER BY id ASC
-    `).all(supplierId) as any[];
+    `).all(String(supplierId)) as any[];
 
     let running = 0;
     return rows.map(r => {

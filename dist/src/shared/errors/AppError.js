@@ -5,7 +5,7 @@
  * across Electron main, preload, and renderer boundaries.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.IdempotencyConflictError = exports.BusinessRuleViolationError = exports.InsufficientStockError = exports.NotFoundError = exports.ForbiddenError = exports.UnauthorizedError = exports.ValidationError = exports.AppError = void 0;
+exports.ConflictError = exports.IdempotencyConflictError = exports.BusinessRuleViolationError = exports.InsufficientStockError = exports.NotFoundError = exports.ForbiddenError = exports.UnauthorizedError = exports.ValidationError = exports.AppError = void 0;
 class AppError extends Error {
     code;
     statusCode;
@@ -38,14 +38,14 @@ class ValidationError extends AppError {
 }
 exports.ValidationError = ValidationError;
 class UnauthorizedError extends AppError {
-    constructor(message = 'Authentication required') {
-        super(message, 'UNAUTHORIZED', 401);
+    constructor(message = 'Authentication required', details) {
+        super(message, 'UNAUTHORIZED', 401, details);
     }
 }
 exports.UnauthorizedError = UnauthorizedError;
 class ForbiddenError extends AppError {
-    constructor(message = 'Access forbidden: Insufficient role permissions') {
-        super(message, 'FORBIDDEN', 403);
+    constructor(message = 'Access forbidden: Insufficient role permissions', details) {
+        super(message, 'FORBIDDEN', 403, details);
     }
 }
 exports.ForbiddenError = ForbiddenError;
@@ -73,3 +73,9 @@ class IdempotencyConflictError extends AppError {
     }
 }
 exports.IdempotencyConflictError = IdempotencyConflictError;
+class ConflictError extends AppError {
+    constructor(message, details) {
+        super(message, 'DATABASE_ERROR', 409, details);
+    }
+}
+exports.ConflictError = ConflictError;

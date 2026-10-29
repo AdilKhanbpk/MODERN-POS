@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductRepository = void 0;
+const crypto_1 = __importDefault(require("crypto"));
 const connection_1 = require("../connection");
 class ProductRepository {
     db;
@@ -111,21 +115,27 @@ class ProductRepository {
             isActive: Boolean(r.isActive)
         }));
     }
+    getNextNumericId() {
+        const row = this.db.prepare("SELECT MAX(CAST(id AS INTEGER)) as maxId FROM products WHERE CAST(id AS INTEGER) > 0").get();
+        return (row?.maxId || 0) + 1;
+    }
     create(product) {
         const defaultCost = product.defaultCostMinor || product.costPrice || 0;
         const defaultPrice = product.defaultSalePriceMinor || product.sellingPrice || 0;
         const reorder = product.reorderLevelScaled || product.minStockLevel || 5;
         const baseUnitId = product.baseUnitId || 1;
-        const info = this.db.prepare(`
+        const businessId = product.businessId || '00000000-0000-0000-0000-000000000001';
+        const isLegacyNumeric = typeof product.categoryId === 'number' && !product.businessId && product.id === undefined;
+        const productId = product.id !== undefined ? product.id : (isLegacyNumeric ? this.getNextNumericId() : crypto_1.default.randomUUID());
+        this.db.prepare(`
       INSERT INTO products (
-        category_id, brand_id, name, sku, barcode, base_unit, base_unit_id,
+        id, business_id, category_id, brand_id, name, sku, barcode, base_unit, base_unit_id,
         cost_price, selling_price, default_cost_minor, default_sale_price_minor,
         current_stock, min_stock_level, reorder_level_scaled, tracking_mode,
         tax_rate, is_tax_inclusive, is_active
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(product.categoryId || 1, product.brandId || null, product.name, product.sku, product.barcode, product.baseUnit || 'Piece', baseUnitId, defaultCost, defaultPrice, defaultCost, defaultPrice, product.currentStock || 0, reorder, reorder, product.trackingMode || 'STANDARD', product.taxRate || 0, product.isTaxInclusive ? 1 : 0, product.isActive !== false ? 1 : 0);
-        const productId = Number(info.lastInsertRowid);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(productId, businessId, product.categoryId || 1, product.brandId || null, product.name, product.sku, product.barcode, product.baseUnit || 'Piece', baseUnitId, defaultCost, defaultPrice, defaultCost, defaultPrice, product.currentStock || 0, reorder, reorder, product.trackingMode || 'STANDARD', product.taxRate || 0, product.isTaxInclusive ? 1 : 0, product.isActive !== false ? 1 : 0);
         // Initial stock balance projection in location 1
         this.db.prepare(`
       INSERT OR REPLACE INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
@@ -158,15 +168,16 @@ class ProductRepository {
     }
     logStockMovement(movement) {
         const locId = movement.locationId || 1;
+        const stockLocId = movement.stockLocationId || null;
         this.db.prepare(`
       INSERT INTO stock_movements (
-        product_id, variant_id, location_id, batch_id, serial_id,
+        product_id, variant_id, location_id, stock_location_id, batch_id, serial_id,
         movement_type, quantity, quantity_base_scaled,
         previous_stock, new_stock, reference_type, reference_id,
         source_type, source_id, reason, user_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(movement.productId, movement.variantId || null, locId, movement.batchId || null, movement.serialId || null, movement.movementType, movement.quantity, movement.quantity, movement.previousStock, movement.newStock, movement.referenceType || null, movement.referenceId || null, movement.referenceType || 'MANUAL', movement.referenceId || 0, movement.reason || null, movement.userId || null);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(movement.productId, movement.variantId || null, locId, stockLocId, movement.batchId || null, movement.serialId || null, movement.movementType, movement.quantity, movement.quantity, movement.previousStock, movement.newStock, movement.referenceType || null, movement.referenceId || null, movement.referenceType || 'MANUAL', movement.referenceId || 0, movement.reason || null, movement.userId || null);
         // Atomically maintain stock_balances projection table
         this.db.prepare(`
       INSERT INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
@@ -178,9 +189,9 @@ class ProductRepository {
     // --- Multi-Barcode & Packaging Unit Conversions ---
     addBarcode(productId, barcode, unitId, variantId) {
         this.db.prepare(`
-      INSERT INTO product_barcodes (product_id, variant_id, barcode, unit_id)
-      VALUES (?, ?, ?, ?)
-    `).run(productId, variantId || null, barcode, unitId);
+      INSERT INTO product_barcodes (product_id, variant_id, barcode, barcode_value, unit_id)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(productId, variantId || null, barcode, barcode, unitId);
     }
     getProductBarcodes(productId) {
         return this.db.prepare(`
@@ -191,12 +202,19 @@ class ProductRepository {
     }
     setUnitConversion(productId, unitId, numerator, denominator = 1) {
         this.db.prepare(`
-      INSERT INTO product_unit_conversions (product_id, unit_id, base_units_numerator, base_units_denominator)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO product_unit_conversions (
+        product_id, unit_id, from_unit_id,
+        base_units_numerator, base_units_denominator,
+        to_base_factor_numerator, to_base_factor_denominator
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(product_id, unit_id) DO UPDATE SET
         base_units_numerator = excluded.base_units_numerator,
-        base_units_denominator = excluded.base_units_denominator
-    `).run(productId, unitId, numerator, denominator);
+        base_units_denominator = excluded.base_units_denominator,
+        to_base_factor_numerator = excluded.to_base_factor_numerator,
+        to_base_factor_denominator = excluded.to_base_factor_denominator,
+        from_unit_id = excluded.from_unit_id
+    `).run(productId, unitId, unitId, numerator, denominator, numerator, denominator);
     }
     getProductUnitConversions(productId) {
         return this.db.prepare(`

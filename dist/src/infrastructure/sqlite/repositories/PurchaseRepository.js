@@ -28,11 +28,12 @@ class PurchaseRepository {
     }
     createItem(poId, item) {
         const unitId = item.unitId || 1;
+        const unitName = item.unitName || 'Piece';
         // Insert legacy
         this.db.prepare(`
       INSERT INTO purchase_order_items (purchase_order_id, product_id, unit_name, quantity, conversion_factor, unit_cost_price, selling_price, line_total)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(poId, item.productId, item.unitName, item.quantity, item.conversionFactor, item.unitCostPrice, item.sellingPrice, item.lineTotal);
+    `).run(poId, item.productId, unitName, item.quantity, item.conversionFactor, item.unitCostPrice, item.sellingPrice, item.lineTotal);
         // Insert enterprise purchase_lines
         this.db.prepare(`
       INSERT INTO purchase_lines (

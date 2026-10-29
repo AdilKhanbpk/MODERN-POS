@@ -4,6 +4,8 @@ import { SupplierRepository } from '../../infrastructure/sqlite/repositories/Sup
 import { AccountRepository } from '../../infrastructure/sqlite/repositories/AccountRepository';
 import { TransactionRunner } from '../../infrastructure/sqlite/transactions/transaction-runner';
 import { LandedCostCalculator } from '../../domain/purchases/landed-cost';
+import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
+import { StockBalanceRepository } from '../../infrastructure/sqlite/repositories/StockBalanceRepository';
 import { DoubleEntryLedger } from '../../domain/accounting/double-entry';
 import { CreatePurchaseOrderRequest, PurchaseOrder } from '../../shared/types';
 import { StockMovementType, StandardAccountCode } from '../../shared/constants/accounts';
@@ -23,6 +25,9 @@ export class PurchaseService {
 
     const supplier = this.supplierRepo.findById(request.supplierId);
     if (!supplier) throw new Error('Supplier not found');
+    if (!supplier.isActive) {
+      throw new Error(`Cannot purchase from inactive supplier '${supplier.name}'`);
+    }
 
     const subtotal = request.items.reduce((sum, it) => sum + (it.quantity * it.unitCostPrice), 0);
     const grandTotal = subtotal + request.additionalCost;
@@ -34,6 +39,24 @@ export class PurchaseService {
     );
 
     return TransactionRunner.run((db) => {
+      // Step A0: Resolve and validate Stock Location (Prompt 11)
+      let stockLoc: any = null;
+      try {
+        if (request.locationId) {
+          stockLoc = db.prepare('SELECT * FROM stock_locations WHERE id = ?').get(String(request.locationId));
+        } else {
+          stockLoc = db.prepare(`SELECT * FROM stock_locations WHERE is_default = 1 AND is_active = 1 LIMIT 1`).get();
+        }
+      } catch {}
+
+      if (stockLoc) {
+        StockLocationRules.validateReceivable({
+          name: stockLoc.name,
+          isActive: Boolean(stockLoc.is_active),
+          isReceivable: Boolean(stockLoc.is_receivable)
+        });
+      }
+
       // 1. Create Purchase Order
       const poId = this.purchaseRepo.create({
         supplierId: request.supplierId,
@@ -74,12 +97,23 @@ export class PurchaseService {
             sellingPrice: item.sellingPrice > 0 ? item.sellingPrice : product.sellingPrice
           });
 
+          if (stockLoc) {
+            const balanceRepo = new StockBalanceRepository(db);
+            balanceRepo.upsertDelta({
+              businessId: stockLoc.business_id,
+              productId: product.id,
+              stockLocationId: stockLoc.id,
+              onHandDeltaScaled: Math.round(addedBaseQty * 1000)
+            });
+          }
+
           this.productRepo.logStockMovement({
             productId: product.id,
             movementType: StockMovementType.PURCHASE_RECEIPT,
             quantity: addedBaseQty,
             previousStock: oldStock,
             newStock,
+            stockLocationId: stockLoc?.id,
             referenceType: 'PURCHASE',
             referenceId: poId,
             reason: `Purchase receipt #${request.invoiceNumber}`
@@ -89,18 +123,26 @@ export class PurchaseService {
 
       // 3. Update Supplier balance and ledger
       const unpaidBalance = grandTotal - request.amountPaid;
-      if (unpaidBalance > 0) {
-        const newBalance = supplier.balance + unpaidBalance;
-        this.supplierRepo.updateBalance(supplier.id, newBalance);
+      if (grandTotal > 0) {
         this.supplierRepo.addLedgerEntry({
           supplierId: supplier.id,
-          transactionType: 'PURCHASE_BILL',
+          entryType: 'PURCHASE_BILL',
           referenceId: poId,
           debit: 0,
-          credit: unpaidBalance,
-          runningBalance: newBalance,
+          credit: grandTotal,
           notes: `Bill #${request.invoiceNumber}`
         });
+
+        if (request.amountPaid > 0) {
+          this.supplierRepo.addLedgerEntry({
+            supplierId: supplier.id,
+            entryType: 'PAYMENT_DISBURSED',
+            referenceId: poId,
+            debit: request.amountPaid,
+            credit: 0,
+            notes: `Payment for Bill #${request.invoiceNumber}`
+          });
+        }
       }
 
       // 4. Double Entry posting

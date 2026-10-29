@@ -22,7 +22,7 @@ export class CustomerRepository implements ICustomerRepository {
     }));
   }
 
-  public findById(id: number): Customer | null {
+  public findById(id: number | string): Customer | null {
     const row = this.db.prepare(`
       SELECT id, customer_code as customerCode, name, phone, email, address,
              balance, credit_limit as creditLimit, credit_limit_minor as creditLimitMinor,
@@ -63,6 +63,7 @@ export class CustomerRepository implements ICustomerRepository {
    * ledger entry (OPENING_BALANCE) and the balance column matches it, avoiding double-counting!
    */
   public create(customer: {
+    id?: number | string;
     customerCode?: string;
     name: string;
     phone: string;
@@ -72,15 +73,23 @@ export class CustomerRepository implements ICustomerRepository {
     creditLimit?: number;
     openingBalanceMinor?: number;
     isActive?: boolean;
-  }): number {
+  }): any {
     const code = customer.customerCode || `CUST-${Date.now().toString().slice(-4)}`;
     const limit = customer.creditLimitMinor || customer.creditLimit || 0;
     const opening = customer.openingBalanceMinor || 0;
 
-    const info = this.db.prepare(`
-      INSERT INTO customers (customer_code, name, phone, email, address, balance, credit_limit, credit_limit_minor, is_active)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+    const nextNumericId = () => {
+      const row = this.db.prepare('SELECT MAX(CAST(id AS INTEGER)) as maxId FROM customers').get() as { maxId: number | null };
+      return (row?.maxId || 0) + 1;
+    };
+
+    const customerId = customer.id !== undefined ? customer.id : nextNumericId();
+
+    this.db.prepare(`
+      INSERT INTO customers (id, customer_code, name, phone, email, address, balance, credit_limit, credit_limit_minor, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
     `).run(
+      customerId,
       code,
       customer.name,
       customer.phone,
@@ -91,17 +100,15 @@ export class CustomerRepository implements ICustomerRepository {
       customer.isActive !== false ? 1 : 0
     );
 
-    const customerId = Number(info.lastInsertRowid);
-
     if (opening !== 0) {
       // Record dated opening balance ledger entry
       this.addLedgerEntry({
-        customerId,
+        customerId: customerId as any,
         entryType: 'OPENING_BALANCE',
         debitMinor: opening > 0 ? opening : 0,
         creditMinor: opening < 0 ? Math.abs(opening) : 0,
         sourceType: 'OPENING_BALANCE',
-        sourceId: customerId,
+        sourceId: customerId as any,
         notes: 'Initial account opening balance'
       });
     }
@@ -114,7 +121,7 @@ export class CustomerRepository implements ICustomerRepository {
    * updates the customer's cached balance directly from the authoritative ledger sum.
    */
   public addLedgerEntry(entry: {
-    customerId: number;
+    customerId: number | string;
     entryType?: 'OPENING_BALANCE' | 'SALE_INVOICE' | 'PAYMENT_RECEIVED' | 'SALE_RETURN' | 'ADJUSTMENT' | string;
     transactionType?: string;
     debitMinor?: number;
@@ -123,10 +130,10 @@ export class CustomerRepository implements ICustomerRepository {
     credit?: number;
     runningBalance?: number;
     sourceType?: string;
-    sourceId?: number;
-    referenceId?: number;
+    sourceId?: number | string;
+    referenceId?: number | string;
     notes?: string;
-  }): number {
+  }): any {
     const entryType = entry.entryType || entry.transactionType || 'ADJUSTMENT';
     const debit = entry.debitMinor ?? entry.debit ?? 0;
     const credit = entry.creditMinor ?? entry.credit ?? 0;
@@ -175,7 +182,7 @@ export class CustomerRepository implements ICustomerRepository {
    * Authoritative source of truth:
    * Balance = Total Debits (Receivables) - Total Credits (Payments/Returns)
    */
-  public calculateLedgerBalance(customerId: number): number {
+  public calculateLedgerBalance(customerId: number | string): number {
     const row = this.db.prepare(`
       SELECT COALESCE(SUM(debit_minor - credit_minor), 0) as balance
       FROM customer_ledger_entries
@@ -199,7 +206,7 @@ export class CustomerRepository implements ICustomerRepository {
     };
   }
 
-  public updateBalance(customerId: number, newBalance: number): void {
+  public updateBalance(customerId: number | string, newBalance: number): void {
     this.db.prepare(`
       UPDATE customers SET balance = ? WHERE id = ?
     `).run(newBalance, customerId);

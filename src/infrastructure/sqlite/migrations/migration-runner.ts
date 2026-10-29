@@ -6,6 +6,15 @@ import { AccountType, StandardAccountCode } from '../../../shared/constants/acco
 import { applyMigrationV2 } from './002_enterprise_schema';
 import { applyMigrationV3 } from './003_part3_scale_snapshots';
 import { applyMigrationV4 } from './004_universal_enterprise_structure';
+import { applyMigrationV5 } from './005_onboarding_module_catalog';
+import { applyMigrationV6 } from './006_auth_sessions_and_approvals';
+import { applyMigrationV7 } from './007_module_installations_and_events';
+import { applyMigrationV8 } from './008_product_catalogue_enterprise';
+import { applyMigrationV9 } from './009_units_and_conversions_enterprise';
+import { applyMigrationV10 } from './010_barcodes_and_scale_profiles';
+import { applyMigrationV11 } from './011_customer_management_and_credit_ledger';
+import { applyMigrationV12 } from './012_supplier_management_and_payable_ledger';
+import { applyMigrationV13 } from './013_stock_locations_and_balances';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -35,6 +44,42 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 4) {
     applyMigrationV4(db);
+  }
+
+  if (currentVersion < 5) {
+    applyMigrationV5(db);
+  }
+
+  if (currentVersion < 6) {
+    applyMigrationV6(db);
+  }
+
+  if (currentVersion < 7) {
+    applyMigrationV7(db);
+  }
+
+  if (currentVersion < 8) {
+    applyMigrationV8(db);
+  }
+
+  if (currentVersion < 9) {
+    applyMigrationV9(db);
+  }
+
+  if (currentVersion < 10) {
+    applyMigrationV10(db);
+  }
+
+  if (currentVersion < 11) {
+    applyMigrationV11(db);
+  }
+
+  if (currentVersion < 12) {
+    applyMigrationV12(db);
+  }
+
+  if (currentVersion < 13) {
+    applyMigrationV13(db);
   }
 }
 
