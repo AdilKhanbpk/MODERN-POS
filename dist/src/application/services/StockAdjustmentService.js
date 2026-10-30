@@ -8,6 +8,10 @@ const ProductRepository_1 = require("../../infrastructure/sqlite/repositories/Pr
 const transaction_runner_1 = require("../../infrastructure/sqlite/transactions/transaction-runner");
 const stock_adjustment_rules_1 = require("../../domain/inventory/stock-adjustment-rules");
 const stocktake_rules_1 = require("../../domain/inventory/stocktake-rules");
+const stock_reservation_rules_1 = require("../../domain/inventory/stock-reservation-rules");
+const batch_expiry_rules_1 = require("../../domain/inventory/batch-expiry-rules");
+const serial_rules_1 = require("../../domain/inventory/serial-rules");
+const BatchRepository_1 = require("../../infrastructure/sqlite/repositories/BatchRepository");
 class StockAdjustmentService {
     adjRepo;
     locationRepo;
@@ -94,6 +98,28 @@ class StockAdjustmentService {
             const differenceQtyScaled = stock_adjustment_rules_1.StockAdjustmentRules.calculateDifference(lineInput.countedQuantityScaled, systemQtyScaled);
             const unitCostMinor = lineInput.unitCostMinor != null ? lineInput.unitCostMinor : (product.defaultCostMinor || product.costPrice || 0);
             const totalValueMinor = Math.round((differenceQtyScaled / 1000) * unitCostMinor);
+            // Batch tracking bypass protection
+            try {
+                const batchSettings = db.prepare('SELECT requires_batch FROM product_batch_settings WHERE product_id = ?').get(product.id);
+                if (batchSettings?.requires_batch && !lineInput.batchId) {
+                    throw new batch_expiry_rules_1.BatchRequiredError(product.name);
+                }
+            }
+            catch (err) {
+                if (err instanceof batch_expiry_rules_1.BatchRequiredError || err?.name === 'BatchRequiredError')
+                    throw err;
+            }
+            // Serial tracking bypass protection
+            try {
+                const serialSettings = db.prepare('SELECT serial_tracking_required FROM product_serial_settings WHERE product_id = ?').get(product.id);
+                if (serialSettings?.serial_tracking_required && !lineInput.serialNumber && !lineInput.serialId) {
+                    throw new serial_rules_1.SerialRequiredError(product.name);
+                }
+            }
+            catch (err) {
+                if (err instanceof serial_rules_1.SerialRequiredError || err?.name === 'SerialRequiredError')
+                    throw err;
+            }
             const unitId = lineInput.unitId
                 ? String(lineInput.unitId)
                 : (product.baseUnitId ? String(product.baseUnitId) : '00000000-0000-0000-0000-000000000001');
@@ -256,6 +282,11 @@ class StockAdjustmentService {
                 // Negative Stock Policy Check
                 const allowNeg = Boolean(product.allow_negative_stock || product.allowNegativeStock);
                 stock_adjustment_rules_1.StockAdjustmentRules.validateNegativeStock(product.name, currentOnHandScaled, line.differenceQuantityScaled, allowNeg);
+                // Prompt 17 Reservation Conflict Guard:
+                // If an adjustment causes on-hand quantity to drop below active reservations, require authorized override.
+                const newOnHandScaled = currentOnHandScaled + line.differenceQuantityScaled;
+                const activeReservedScaled = bal ? bal.reservedScaled : 0;
+                stock_reservation_rules_1.StockReservationRules.validateAdjustmentReservationConflict(product.name, newOnHandScaled, activeReservedScaled, Boolean(options.allowReservationConflict));
                 // 2. Post Movement if difference != 0
                 if (line.differenceQuantityScaled !== 0) {
                     const isIncrease = line.differenceQuantityScaled > 0;
@@ -297,6 +328,22 @@ class StockAdjustmentService {
                     // Update product cached stock
                     const newTotalStock = (currentOnHandScaled + line.differenceQuantityScaled) / 1000;
                     this.productRepo.updateStock(line.productId, newTotalStock);
+                    // Update batch stock balance if batch-linked
+                    if (line.batchId) {
+                        try {
+                            const batchRepo = new BatchRepository_1.BatchRepository(db);
+                            batchRepo.upsertBalanceDelta({
+                                businessId: adj.businessId,
+                                batchId: line.batchId,
+                                stockLocationId: adj.stockLocationId,
+                                onHandDeltaScaled: line.differenceQuantityScaled,
+                                reservedDeltaScaled: 0
+                            });
+                        }
+                        catch {
+                            // Safe fallback
+                        }
+                    }
                 }
             }
             // 3. Mark adjustment posted

@@ -330,3 +330,4 @@ export class StockReservationRepository {
     return Number(row?.active_reserved || 0);
   }
 }
+

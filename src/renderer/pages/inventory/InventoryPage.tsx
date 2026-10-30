@@ -6,6 +6,11 @@ import { StockLocationsView } from '../../components/inventory/StockLocationsVie
 import { StockAdjustmentsView } from '../../components/inventory/StockAdjustmentsView';
 import { StocktakesView } from '../../components/inventory/StocktakesView';
 import { StockTransfersView } from '../../components/inventory/StockTransfersView';
+import { StockReservationsView } from '../../components/inventory/StockReservationsView';
+import { StockReplenishmentView } from '../../components/inventory/StockReplenishmentView';
+import { BatchExpiryView } from '../../components/inventory/BatchExpiryView';
+import { SerialTrackingView } from '../../components/inventory/SerialTrackingView';
+import { Bookmark, TrendingUp, ShieldAlert, QrCode } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -13,7 +18,7 @@ export const InventoryPage: React.FC = () => {
   const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'products' | 'locations' | 'adjustments' | 'stocktakes' | 'transfers'>('products');
+  const [subTab, setSubTab] = useState<'products' | 'locations' | 'adjustments' | 'stocktakes' | 'transfers' | 'reservations' | 'replenishment' | 'batches' | 'serials'>('products');
 
   // Modal state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -153,9 +158,65 @@ export const InventoryPage: React.FC = () => {
         >
           <ArrowRightLeft className="w-4 h-4" /> Stock Transfers
         </button>
+        <button
+          onClick={() => setSubTab('reservations')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'reservations'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Bookmark className="w-4 h-4" /> Reservations
+        </button>
+        <button
+          onClick={() => setSubTab('replenishment')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'replenishment'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Replenishment & Alerts
+        </button>
+        <button
+          onClick={() => setSubTab('batches')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'batches'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" /> Batches & Expiry
+        </button>
+        <button
+          onClick={() => setSubTab('serials')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'serials'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <QrCode className="w-4 h-4" /> Serial Numbers
+        </button>
       </div>
 
-      {subTab === 'transfers' ? (
+      {subTab === 'serials' ? (
+        <div className="flex-1 overflow-y-auto">
+          <SerialTrackingView />
+        </div>
+      ) : subTab === 'batches' ? (
+        <div className="flex-1 overflow-y-auto">
+          <BatchExpiryView />
+        </div>
+      ) : subTab === 'replenishment' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StockReplenishmentView />
+        </div>
+      ) : subTab === 'reservations' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StockReservationsView />
+        </div>
+      ) : subTab === 'transfers' ? (
         <div className="flex-1 overflow-y-auto">
           <StockTransfersView />
         </div>

@@ -22,6 +22,10 @@ var Permission;
     Permission["MANAGE_PRODUCTS"] = "MANAGE_PRODUCTS";
     Permission["ADJUST_STOCK"] = "ADJUST_STOCK";
     Permission["PURCHASE_RECEIVE"] = "PURCHASE_RECEIVE";
+    Permission["MANAGE_SERIAL_NUMBERS"] = "MANAGE_SERIAL_NUMBERS";
+    Permission["OVERRIDE_SERIAL_RESTRICTIONS"] = "OVERRIDE_SERIAL_RESTRICTIONS";
+    Permission["VIEW_COST_PRICES"] = "VIEW_COST_PRICES";
+    Permission["VIEW_CUSTOMER_PII"] = "VIEW_CUSTOMER_PII";
     // Customers & Suppliers
     Permission["MANAGE_CUSTOMERS"] = "MANAGE_CUSTOMERS";
     Permission["MANAGE_SUPPLIERS"] = "MANAGE_SUPPLIERS";
@@ -55,6 +59,10 @@ exports.ROLE_PERMISSIONS = {
         Permission.MANAGE_PRODUCTS,
         Permission.ADJUST_STOCK,
         Permission.PURCHASE_RECEIVE,
+        Permission.MANAGE_SERIAL_NUMBERS,
+        Permission.OVERRIDE_SERIAL_RESTRICTIONS,
+        Permission.VIEW_COST_PRICES,
+        Permission.VIEW_CUSTOMER_PII,
         Permission.MANAGE_CUSTOMERS,
         Permission.MANAGE_SUPPLIERS,
         Permission.GIVE_CUSTOMER_CREDIT,
@@ -81,6 +89,10 @@ exports.ROLE_PERMISSIONS = {
         Permission.MANAGE_PRODUCTS,
         Permission.ADJUST_STOCK,
         Permission.PURCHASE_RECEIVE,
+        Permission.MANAGE_SERIAL_NUMBERS,
+        Permission.OVERRIDE_SERIAL_RESTRICTIONS,
+        Permission.VIEW_COST_PRICES,
+        Permission.VIEW_CUSTOMER_PII,
         Permission.MANAGE_SUPPLIERS
     ]
 };

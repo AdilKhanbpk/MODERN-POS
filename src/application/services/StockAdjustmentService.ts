@@ -13,6 +13,9 @@ import {
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
 import { StocktakeRules, StockLocationFrozenError, StocktakeSecurityError } from '../../domain/inventory/stocktake-rules';
 import { StockReservationRules, ReservationStockConflictError } from '../../domain/inventory/stock-reservation-rules';
+import { BatchRequiredError } from '../../domain/inventory/batch-expiry-rules';
+import { SerialRequiredError } from '../../domain/inventory/serial-rules';
+import { BatchRepository } from '../../infrastructure/sqlite/repositories/BatchRepository';
 import {
   EnterpriseStockAdjustment,
   EnterpriseStockAdjustmentDetail,
@@ -143,6 +146,26 @@ export class StockAdjustmentService {
 
       const unitCostMinor = lineInput.unitCostMinor != null ? lineInput.unitCostMinor : (product.defaultCostMinor || product.costPrice || 0);
       const totalValueMinor = Math.round((differenceQtyScaled / 1000) * unitCostMinor);
+
+      // Batch tracking bypass protection
+      try {
+        const batchSettings = db.prepare('SELECT requires_batch FROM product_batch_settings WHERE product_id = ?').get(String(product.id)) as any;
+        if (batchSettings?.requires_batch && !lineInput.batchId) {
+          throw new BatchRequiredError(product.name);
+        }
+      } catch (err: any) {
+        if (err instanceof BatchRequiredError || err?.name === 'BatchRequiredError') throw err;
+      }
+
+      // Serial tracking bypass protection
+      try {
+        const serialSettings = db.prepare('SELECT serial_tracking_required FROM product_serial_settings WHERE product_id = ?').get(String(product.id)) as any;
+        if (serialSettings?.serial_tracking_required && !lineInput.serialNumber && !lineInput.serialId) {
+          throw new SerialRequiredError(product.name);
+        }
+      } catch (err: any) {
+        if (err instanceof SerialRequiredError || err?.name === 'SerialRequiredError') throw err;
+      }
 
       const unitId = lineInput.unitId
         ? String(lineInput.unitId)
@@ -458,6 +481,22 @@ export class StockAdjustmentService {
           // Update product cached stock
           const newTotalStock = (currentOnHandScaled + line.differenceQuantityScaled) / 1000;
           this.productRepo.updateStock(line.productId, newTotalStock);
+
+          // Update batch stock balance if batch-linked
+          if (line.batchId) {
+            try {
+              const batchRepo = new BatchRepository(db);
+              batchRepo.upsertBalanceDelta({
+                businessId: adj.businessId,
+                batchId: line.batchId,
+                stockLocationId: adj.stockLocationId,
+                onHandDeltaScaled: line.differenceQuantityScaled,
+                reservedDeltaScaled: 0
+              });
+            } catch {
+              // Safe fallback
+            }
+          }
         }
       }
 

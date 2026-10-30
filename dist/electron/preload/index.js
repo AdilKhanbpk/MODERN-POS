@@ -250,6 +250,62 @@ exports.posApi = {
         revalue: (params) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_REVALUE, { params }),
         allocateLandedCosts: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, { input }),
         customerReturn: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, { input })
+    },
+    // Stock Reservations (Prompt 17)
+    reservations: {
+        list: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_LIST, filter),
+        getById: (id) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_GET_BY_ID, { id }),
+        create: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_CREATE, { dto, actor }),
+        fulfill: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_FULFILL, { dto, actor }),
+        release: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_RELEASE, { dto, actor }),
+        extend: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_EXTEND, { dto, actor }),
+        cancel: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_CANCEL, { id, reason, actor }),
+        checkExpired: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.RESERVATIONS_CHECK_EXPIRED, { businessId })
+    },
+    // Stock Monitoring & Replenishment (Prompt 18)
+    replenishment: {
+        getRules: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_GET_RULES, { businessId, locationId }),
+        setRule: (dto) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_SET_RULE, { dto }),
+        generateSuggestions: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_GENERATE_SUGGESTIONS, filter),
+        listSuggestions: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_LIST_SUGGESTIONS, filter),
+        editSuggestion: (id, quantityScaled) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_EDIT_SUGGESTION, { id, quantityScaled }),
+        dismissSuggestion: (id) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_DISMISS_SUGGESTION, { id }),
+        convertToPo: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_CONVERT_TO_PO, { dto, actor }),
+        getAlerts: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.REPLENISHMENT_GET_ALERTS, { businessId, locationId })
+    },
+    // Batch & Expiry Management (Prompt 19)
+    batchExpiry: {
+        getSettings: (productId, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_GET_SETTINGS, { productId, businessId }),
+        configureSettings: (dto) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_CONFIGURE_SETTINGS, { dto }),
+        receiveBatch: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_RECEIVE, { dto, actor }),
+        listBatches: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_LIST, filter),
+        getById: (batchId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_GET_BY_ID, batchId),
+        allocateFefo: (params) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_ALLOCATE_FEFO, params),
+        customerReturn: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_CUSTOMER_RETURN, { dto, actor }),
+        recall: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_RECALL, { dto, actor }),
+        releaseQuarantine: (batchId, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_RELEASE_QUARANTINE, { batchId, actor }),
+        writeOff: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_WRITE_OFF, { dto, actor }),
+        transfer: (params, actor) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_TRANSFER, { params, actor }),
+        reportStock: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_REPORT_STOCK, { businessId, locationId }),
+        reportExpiringSoon: (businessId, daysThreshold, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_REPORT_EXPIRING_SOON, { businessId, daysThreshold, locationId }),
+        reportExpired: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_REPORT_EXPIRED, { businessId, locationId }),
+        reportRecalled: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_REPORT_RECALLED, { businessId }),
+        reportValuation: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_REPORT_VALUATION, { businessId, locationId }),
+        traceSales: (batchId) => invoke(ipc_channels_1.IPC_CHANNELS.BATCH_TRACE_SALES, batchId)
+    },
+    // Serial-Number Tracking (Prompt 20)
+    serialTracking: {
+        getSettings: (businessId, productId) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_GET_SETTINGS, { businessId, productId }),
+        configureSettings: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_CONFIGURE_SETTINGS, payload),
+        receiveUnits: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_RECEIVE, payload),
+        allocateSale: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_ALLOCATE_SALE, payload),
+        customerReturn: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_CUSTOMER_RETURN, payload),
+        transfer: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_TRANSFER, payload),
+        warrantyClaim: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_WARRANTY_CLAIM, payload),
+        replaceDefective: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_REPLACE_DEFECTIVE, payload),
+        updateStatus: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_UPDATE_STATUS, payload),
+        search: (query, permissions) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_SEARCH, { query, permissions }),
+        getAudit: (businessId, serialIdentifier, permissions) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_GET_AUDIT, { businessId, serialIdentifier, permissions })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);

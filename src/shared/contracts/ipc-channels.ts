@@ -227,7 +227,50 @@ export const IPC_CHANNELS = {
   RESERVATIONS_RELEASE: 'reservations:release',
   RESERVATIONS_EXTEND: 'reservations:extend',
   RESERVATIONS_CANCEL: 'reservations:cancel',
-  RESERVATIONS_CHECK_EXPIRED: 'reservations:check-expired'
+  RESERVATIONS_CHECK_EXPIRED: 'reservations:check-expired',
+
+  // Stock Monitoring & Replenishment (Prompt 18)
+  REPLENISHMENT_GET_RULES: 'replenishment:get-rules',
+  REPLENISHMENT_SET_RULE: 'replenishment:set-rule',
+  REPLENISHMENT_GENERATE_SUGGESTIONS: 'replenishment:generate-suggestions',
+  REPLENISHMENT_LIST_SUGGESTIONS: 'replenishment:list-suggestions',
+  REPLENISHMENT_EDIT_SUGGESTION: 'replenishment:edit-suggestion',
+  REPLENISHMENT_DISMISS_SUGGESTION: 'replenishment:dismiss-suggestion',
+  REPLENISHMENT_CONVERT_TO_PO: 'replenishment:convert-to-po',
+  REPLENISHMENT_GET_ALERTS: 'replenishment:get-alerts',
+
+  // Batch & Expiry Management (Prompt 19)
+  BATCH_GET_SETTINGS: 'batch:get-settings',
+  BATCH_CONFIGURE_SETTINGS: 'batch:configure-settings',
+  BATCH_RECEIVE: 'batch:receive',
+  BATCH_LIST: 'batch:list',
+  BATCH_GET_BY_ID: 'batch:get-by-id',
+  BATCH_ALLOCATE_FEFO: 'batch:allocate-fefo',
+  BATCH_CUSTOMER_RETURN: 'batch:customer-return',
+  BATCH_SUPPLIER_RETURN: 'batch:supplier-return',
+  BATCH_RECALL: 'batch:recall',
+  BATCH_RELEASE_QUARANTINE: 'batch:release-quarantine',
+  BATCH_WRITE_OFF: 'batch:write-off',
+  BATCH_TRANSFER: 'batch:transfer',
+  BATCH_REPORT_STOCK: 'batch:report-stock',
+  BATCH_REPORT_EXPIRING_SOON: 'batch:report-expiring-soon',
+  BATCH_REPORT_EXPIRED: 'batch:report-expired',
+  BATCH_REPORT_RECALLED: 'batch:report-recalled',
+  BATCH_REPORT_VALUATION: 'batch:report-valuation',
+  BATCH_TRACE_SALES: 'batch:trace-sales',
+
+  // Serial-Number Tracking (Prompt 20)
+  SERIAL_GET_SETTINGS: 'serial:get-settings',
+  SERIAL_CONFIGURE_SETTINGS: 'serial:configure-settings',
+  SERIAL_RECEIVE: 'serial:receive',
+  SERIAL_ALLOCATE_SALE: 'serial:allocate-sale',
+  SERIAL_CUSTOMER_RETURN: 'serial:customer-return',
+  SERIAL_TRANSFER: 'serial:transfer',
+  SERIAL_WARRANTY_CLAIM: 'serial:warranty-claim',
+  SERIAL_REPLACE_DEFECTIVE: 'serial:replace-defective',
+  SERIAL_UPDATE_STATUS: 'serial:update-status',
+  SERIAL_SEARCH: 'serial:search',
+  SERIAL_GET_AUDIT: 'serial:get-audit'
 };
 
 export interface ApiResponse<T = any> {

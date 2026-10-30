@@ -118,7 +118,7 @@ export class SaleRepository implements ISaleRepository {
     lineTax: number;
     lineTotal: number;
     lineProfit: number;
-  }): void {
+  }): number {
     const sku = item.productSku || item.productBarcode || `SKU-${item.productId}`;
     const unitId = item.unitId || 1;
     const qtyScaled = item.quantityScaled !== undefined
@@ -133,7 +133,7 @@ export class SaleRepository implements ISaleRepository {
     const den = item.conversionDenominator || 1;
 
     // Insert into legacy sale_items
-    this.db.prepare(`
+    const itemInfo = this.db.prepare(`
       INSERT INTO sale_items (
         sale_id, product_id, product_name, product_barcode, unit_name,
         quantity, conversion_factor, unit_price, cost_price, line_discount,
@@ -185,6 +185,8 @@ export class SaleRepository implements ISaleRepository {
       num,
       den
     );
+
+    return Number(itemInfo.lastInsertRowid);
   }
 
   public findById(id: number): Sale | null {

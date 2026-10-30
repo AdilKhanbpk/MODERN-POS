@@ -452,6 +452,110 @@ export const posApi = {
       invoke(IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, { input }),
     customerReturn: (input: any): Promise<any> =>
       invoke(IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, { input })
+  },
+
+  // Stock Reservations (Prompt 17)
+  reservations: {
+    list: (filter: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_LIST, filter),
+    getById: (id: string): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_GET_BY_ID, { id }),
+    create: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_CREATE, { dto, actor }),
+    fulfill: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_FULFILL, { dto, actor }),
+    release: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_RELEASE, { dto, actor }),
+    extend: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_EXTEND, { dto, actor }),
+    cancel: (id: string, reason?: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_CANCEL, { id, reason, actor }),
+    checkExpired: (businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.RESERVATIONS_CHECK_EXPIRED, { businessId })
+  },
+
+  // Stock Monitoring & Replenishment (Prompt 18)
+  replenishment: {
+    getRules: (businessId: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_GET_RULES, { businessId, locationId }),
+    setRule: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_SET_RULE, { dto }),
+    generateSuggestions: (filter: any): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_GENERATE_SUGGESTIONS, filter),
+    listSuggestions: (filter: any): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_LIST_SUGGESTIONS, filter),
+    editSuggestion: (id: string, quantityScaled: number): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_EDIT_SUGGESTION, { id, quantityScaled }),
+    dismissSuggestion: (id: string): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_DISMISS_SUGGESTION, { id }),
+    convertToPo: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_CONVERT_TO_PO, { dto, actor }),
+    getAlerts: (businessId: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.REPLENISHMENT_GET_ALERTS, { businessId, locationId })
+  },
+
+  // Batch & Expiry Management (Prompt 19)
+  batchExpiry: {
+    getSettings: (productId: string | number, businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_GET_SETTINGS, { productId, businessId }),
+    configureSettings: (dto: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_CONFIGURE_SETTINGS, { dto }),
+    receiveBatch: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_RECEIVE, { dto, actor }),
+    listBatches: (filter: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_LIST, filter),
+    getById: (batchId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_GET_BY_ID, batchId),
+    allocateFefo: (params: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_ALLOCATE_FEFO, params),
+    customerReturn: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_CUSTOMER_RETURN, { dto, actor }),
+    recall: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_RECALL, { dto, actor }),
+    releaseQuarantine: (batchId: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_RELEASE_QUARANTINE, { batchId, actor }),
+    writeOff: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_WRITE_OFF, { dto, actor }),
+    transfer: (params: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_TRANSFER, { params, actor }),
+    reportStock: (businessId: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_REPORT_STOCK, { businessId, locationId }),
+    reportExpiringSoon: (businessId: string, daysThreshold?: number, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_REPORT_EXPIRING_SOON, { businessId, daysThreshold, locationId }),
+    reportExpired: (businessId: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_REPORT_EXPIRED, { businessId, locationId }),
+    reportRecalled: (businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_REPORT_RECALLED, { businessId }),
+    reportValuation: (businessId: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_REPORT_VALUATION, { businessId, locationId }),
+    traceSales: (batchId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.BATCH_TRACE_SALES, batchId)
+  },
+
+  // Serial-Number Tracking (Prompt 20)
+  serialTracking: {
+    getSettings: (businessId: string, productId: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_GET_SETTINGS, { businessId, productId }),
+    configureSettings: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_CONFIGURE_SETTINGS, payload),
+    receiveUnits: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_RECEIVE, payload),
+    allocateSale: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_ALLOCATE_SALE, payload),
+    customerReturn: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_CUSTOMER_RETURN, payload),
+    transfer: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_TRANSFER, payload),
+    warrantyClaim: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_WARRANTY_CLAIM, payload),
+    replaceDefective: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_REPLACE_DEFECTIVE, payload),
+    updateStatus: (payload: any): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_UPDATE_STATUS, payload),
+    search: (query: any, permissions?: any[]): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_SEARCH, { query, permissions }),
+    getAudit: (businessId: string, serialIdentifier: string, permissions?: any[]): Promise<any> =>
+      invoke(IPC_CHANNELS.SERIAL_GET_AUDIT, { businessId, serialIdentifier, permissions })
   }
 };
 

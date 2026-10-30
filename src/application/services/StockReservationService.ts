@@ -23,6 +23,8 @@ import {
   CrossBranchReservationError
 } from '../../domain/inventory/stock-reservation-rules';
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
+import { BatchRepository } from '../../infrastructure/sqlite/repositories/BatchRepository';
+import { InsufficientBatchStockError } from '../../domain/inventory/batch-expiry-rules';
 
 export interface ActorContext {
   userId: string | number;
@@ -127,6 +129,24 @@ export class StockReservationService {
       const reservedScaled = balance ? balance.reservedScaled : 0;
       const availableScaled = StockReservationRules.calculateAvailableStock(onHandScaled, reservedScaled);
 
+      // Validate batch availability if reservation is batch-specific
+      if (item.batchId) {
+        const batchBal = this.db.prepare(`
+          SELECT on_hand_scaled, reserved_scaled FROM batch_stock_balances
+          WHERE business_id = ? AND batch_id = ? AND stock_location_id = ?
+        `).get(dto.businessId, item.batchId, item.stockLocationId) as any;
+        if (batchBal) {
+          const bAvail = (Number(batchBal.on_hand_scaled) || 0) - (Number(batchBal.reserved_scaled) || 0);
+          if (bAvail < item.reservedQuantityScaled) {
+            throw new InsufficientBatchStockError(
+              String(item.batchId),
+              item.reservedQuantityScaled / 1000,
+              bAvail / 1000
+            );
+          }
+        }
+      }
+
       StockReservationRules.validateAvailabilityForReservation(
         product.name,
         availableScaled,
@@ -167,7 +187,7 @@ export class StockReservationService {
     const tx = this.db.transaction(() => {
       this.reservationRepo.create(reservation, linesToCreate);
 
-      // Immediately commit reserved quantities into stock_balances
+      // Immediately commit reserved quantities into stock_balances and batch_stock_balances
       for (const line of linesToCreate) {
         this.balanceRepo.upsertDelta({
           businessId: dto.businessId,
@@ -177,6 +197,21 @@ export class StockReservationService {
           onHandDeltaScaled: 0,
           reservedDeltaScaled: line.reservedQuantityScaled
         });
+
+        if (line.batchId) {
+          try {
+            const batchRepo = new BatchRepository(this.db);
+            batchRepo.upsertBalanceDelta({
+              businessId: dto.businessId,
+              batchId: String(line.batchId),
+              stockLocationId: line.stockLocationId,
+              onHandDeltaScaled: 0,
+              reservedDeltaScaled: line.reservedQuantityScaled
+            });
+          } catch {
+            // Safe fallback
+          }
+        }
       }
     });
 
@@ -398,8 +433,6 @@ export class StockReservationService {
               onHandDeltaScaled: 0,
               reservedDeltaScaled: -unfulfilled
             });
-
-            this.reservationRepo.updateLineQuantities(line.id, 0, unfulfilled);
           }
         }
 

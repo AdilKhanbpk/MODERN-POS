@@ -43,7 +43,7 @@ export interface ISaleRepository {
     lineTax: number;
     lineTotal: number;
     lineProfit: number;
-  }): void;
+  }): number | void;
   findById(id: number): Sale | null;
   list(limit?: number): Sale[];
   voidSale(id: number): void;

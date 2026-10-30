@@ -13,6 +13,7 @@ export * from './unit-conversion';
 export * from './barcode';
 export * from './customer';
 export * from './supplier';
+export * from './serial-tracking';
 
 // -------------------------------------------------------------
 // GROUP A: Business Settings, Security & Sequences
@@ -712,6 +713,10 @@ export interface CartItemInput {
   discountAmount?: number;
   taxRate?: number;
   isTaxInclusive?: boolean;
+  batchId?: string;
+  batchAllocations?: Array<{ batchId: string; quantityScaled: number }>;
+  serialNumbers?: string[];
+  serialIds?: string[];
 }
 
 export interface SaleCalculationResult {
@@ -852,5 +857,7 @@ export * from './stocktake';
 export * from './stock-transfer';
 export * from './inventory-valuation';
 export * from './stock-reservation';
+export * from './stock-replenishment';
+export * from './batch-expiry';
 
 

@@ -25,6 +25,10 @@ const _015_stock_adjustments_1 = require("./015_stock_adjustments");
 const _016_stocktakes_and_physical_counting_1 = require("./016_stocktakes_and_physical_counting");
 const _017_stock_transfers_and_in_transit_1 = require("./017_stock_transfers_and_in_transit");
 const _018_inventory_valuation_and_costing_1 = require("./018_inventory_valuation_and_costing");
+const _019_stock_reservations_1 = require("./019_stock_reservations");
+const _020_stock_replenishment_and_monitoring_1 = require("./020_stock_replenishment_and_monitoring");
+const _021_batch_and_expiry_management_1 = require("./021_batch_and_expiry_management");
+const _022_serial_number_tracking_1 = require("./022_serial_number_tracking");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -90,6 +94,18 @@ function runMigrations(db) {
     }
     if (currentVersion < 18) {
         (0, _018_inventory_valuation_and_costing_1.applyMigrationV18)(db);
+    }
+    if (currentVersion < 19) {
+        (0, _019_stock_reservations_1.applyMigrationV19)(db);
+    }
+    if (currentVersion < 20) {
+        (0, _020_stock_replenishment_and_monitoring_1.applyMigrationV20)(db);
+    }
+    if (currentVersion < 21) {
+        (0, _021_batch_and_expiry_management_1.applyMigrationV21)(db);
+    }
+    if (currentVersion < 22) {
+        (0, _022_serial_number_tracking_1.applyMigrationV22)(db);
     }
 }
 function applyMigrationV1(db) {

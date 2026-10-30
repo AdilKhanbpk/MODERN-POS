@@ -25,6 +25,9 @@ import { StocktakeService } from '../../../src/application/services/StocktakeSer
 import { StockTransferService } from '../../../src/application/services/StockTransferService';
 import { InventoryValuationService } from '../../../src/application/services/InventoryValuationService';
 import { StockReservationService } from '../../../src/application/services/StockReservationService';
+import { StockReplenishmentService } from '../../../src/application/services/StockReplenishmentService';
+import { BatchExpiryService } from '../../../src/application/services/BatchExpiryService';
+import { SerialTrackingService } from '../../../src/application/services/SerialTrackingService';
 import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
@@ -67,6 +70,9 @@ export function registerIpcHandlers(): void {
   const stockTransferService = new StockTransferService(getDatabase(), moduleManager);
   const valuationService = new InventoryValuationService(getDatabase());
   const stockReservationService = new StockReservationService(getDatabase());
+  const stockReplenishmentService = new StockReplenishmentService(getDatabase());
+  const batchExpiryService = new BatchExpiryService(getDatabase());
+  const serialTrackingService = new SerialTrackingService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -955,6 +961,157 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.RESERVATIONS_CHECK_EXPIRED, (payload: { businessId?: string }) => {
     return stockReservationService.checkAndExpireReservations(payload?.businessId);
+  });
+
+  // Stock Monitoring & Replenishment (Prompt 18)
+  handle(IPC_CHANNELS.REPLENISHMENT_GET_RULES, (payload: { businessId: string; locationId?: string }) => {
+    return stockReplenishmentService.listReorderRules(payload.businessId, payload.locationId);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_SET_RULE, (payload: { dto: any }) => {
+    return stockReplenishmentService.setReorderRule(payload.dto);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_GENERATE_SUGGESTIONS, (filter: any) => {
+    return stockReplenishmentService.generateReplenishmentSuggestions(filter);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_LIST_SUGGESTIONS, (filter: any) => {
+    return stockReplenishmentService.listSuggestions(filter);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_EDIT_SUGGESTION, (payload: { id: string; quantityScaled: number }) => {
+    return stockReplenishmentService.editSuggestionQuantity(payload.id, payload.quantityScaled);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_DISMISS_SUGGESTION, (payload: { id: string }) => {
+    stockReplenishmentService.dismissSuggestion(payload.id);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_CONVERT_TO_PO, (payload: { dto: any; actor?: any }) => {
+    const actor = payload.actor || { userId: 1 };
+    return stockReplenishmentService.convertSuggestionsToDraftPo(payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.REPLENISHMENT_GET_ALERTS, (payload: { businessId: string; locationId?: string }) => {
+    return stockReplenishmentService.getStockAlerts(payload.businessId, payload.locationId);
+  });
+
+  // Batch & Expiry Management (Prompt 19)
+  handle(IPC_CHANNELS.BATCH_GET_SETTINGS, (payload: { productId: string | number; businessId: string }) => {
+    return batchExpiryService.getBatchSettings(payload.productId, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_CONFIGURE_SETTINGS, (payload: { dto: any }) => {
+    return batchExpiryService.configureBatchSettings(payload.dto);
+  });
+
+  handle(IPC_CHANNELS.BATCH_RECEIVE, (payload: { dto: any; actor?: any }) => {
+    return batchExpiryService.receiveBatch(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.BATCH_LIST, (filter: any) => {
+    return (batchExpiryService as any).repo.listBatches(filter);
+  });
+
+  handle(IPC_CHANNELS.BATCH_GET_BY_ID, (batchId: string) => {
+    return (batchExpiryService as any).repo.findById(batchId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_ALLOCATE_FEFO, (params: any) => {
+    return batchExpiryService.allocateBatchesForSale(params);
+  });
+
+  handle(IPC_CHANNELS.BATCH_CUSTOMER_RETURN, (payload: { dto: any; actor?: any }) => {
+    return batchExpiryService.customerReturnBatch(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.BATCH_RECALL, (payload: { dto: any; actor?: any }) => {
+    return batchExpiryService.recallBatch(payload.dto, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.BATCH_RELEASE_QUARANTINE, (payload: { batchId: string; actor?: any }) => {
+    return batchExpiryService.releaseQuarantineBatch(payload.batchId, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.BATCH_WRITE_OFF, (payload: { dto: any; actor?: any }) => {
+    batchExpiryService.writeOffBatch(payload.dto, payload.actor);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.BATCH_TRANSFER, (payload: { params: any; actor?: any }) => {
+    batchExpiryService.transferBatchStock(payload.params, payload.actor);
+    return true;
+  });
+
+  handle(IPC_CHANNELS.BATCH_REPORT_STOCK, (payload: { businessId: string; locationId?: string }) => {
+    return batchExpiryService.getBatchStockReport(payload.businessId, payload.locationId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_REPORT_EXPIRING_SOON, (payload: { businessId: string; daysThreshold?: number; locationId?: string }) => {
+    return batchExpiryService.getExpiringSoonReport(payload.businessId, payload.daysThreshold, payload.locationId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_REPORT_EXPIRED, (payload: { businessId: string; locationId?: string }) => {
+    return batchExpiryService.getExpiredStockReport(payload.businessId, payload.locationId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_REPORT_RECALLED, (payload: { businessId: string }) => {
+    return batchExpiryService.getRecalledBatchReport(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_REPORT_VALUATION, (payload: { businessId: string; locationId?: string }) => {
+    return batchExpiryService.getBatchValuationReport(payload.businessId, payload.locationId);
+  });
+
+  handle(IPC_CHANNELS.BATCH_TRACE_SALES, (batchId: string) => {
+    return batchExpiryService.getBatchSalesTraceability(batchId);
+  });
+
+  // --- Serial Tracking Handlers (Prompt 20) ---
+  handle(IPC_CHANNELS.SERIAL_GET_SETTINGS, (payload: { businessId: string; productId: string | number }) => {
+    return serialTrackingService.getSettings(payload.businessId, payload.productId);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_CONFIGURE_SETTINGS, (payload: any) => {
+    return serialTrackingService.configureSettings(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_RECEIVE, (payload: any) => {
+    return serialTrackingService.receiveSerialUnits(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_ALLOCATE_SALE, (payload: any) => {
+    return serialTrackingService.validateAndAllocateSaleSerials(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_CUSTOMER_RETURN, (payload: any) => {
+    return serialTrackingService.processCustomerReturn(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_TRANSFER, (payload: any) => {
+    return serialTrackingService.transferSerial(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_WARRANTY_CLAIM, (payload: any) => {
+    return serialTrackingService.createWarrantyClaim(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_REPLACE_DEFECTIVE, (payload: any) => {
+    return serialTrackingService.replaceDefectiveSerial(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_UPDATE_STATUS, (payload: any) => {
+    return serialTrackingService.updateSerialStatus(payload);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_SEARCH, (payload: { query: any; permissions?: any[] }) => {
+    return serialTrackingService.searchSerials(payload.query, payload.permissions || []);
+  });
+
+  handle(IPC_CHANNELS.SERIAL_GET_AUDIT, (payload: { businessId: string; serialIdentifier: string; permissions?: any[] }) => {
+    return serialTrackingService.getSerialAudit(payload.businessId, payload.serialIdentifier, payload.permissions || []);
   });
 }
 

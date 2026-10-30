@@ -21,6 +21,9 @@ import { applyMigrationV16 } from './016_stocktakes_and_physical_counting';
 import { applyMigrationV17 } from './017_stock_transfers_and_in_transit';
 import { applyMigrationV18 } from './018_inventory_valuation_and_costing';
 import { applyMigrationV19 } from './019_stock_reservations';
+import { applyMigrationV20 } from './020_stock_replenishment_and_monitoring';
+import { applyMigrationV21 } from './021_batch_and_expiry_management';
+import { applyMigrationV22 } from './022_serial_number_tracking';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -110,6 +113,18 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 19) {
     applyMigrationV19(db);
+  }
+
+  if (currentVersion < 20) {
+    applyMigrationV20(db);
+  }
+
+  if (currentVersion < 21) {
+    applyMigrationV21(db);
+  }
+
+  if (currentVersion < 22) {
+    applyMigrationV22(db);
   }
 }
 

@@ -99,3 +99,4 @@ export interface ReservationFilter {
   sourceType?: StockReservationSourceType;
   search?: string;
 }
+

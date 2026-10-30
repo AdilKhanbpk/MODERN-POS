@@ -72,3 +72,4 @@ export function down(db: Database.Database): void {
   db.exec(`DROP TABLE IF EXISTS stock_reservations;`);
   db.prepare('DELETE FROM schema_migrations WHERE version = 19').run();
 }
+

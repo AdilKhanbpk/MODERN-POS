@@ -10,9 +10,17 @@ const pricing_calculator_1 = require("../../domain/sales/pricing-calculator");
 const stock_rules_1 = require("../../domain/inventory/stock-rules");
 const stock_location_rules_1 = require("../../domain/inventory/stock-location-rules");
 const stocktake_rules_1 = require("../../domain/inventory/stocktake-rules");
+const stock_reservation_rules_1 = require("../../domain/inventory/stock-reservation-rules");
+const StockReservationRepository_1 = require("../../infrastructure/sqlite/repositories/StockReservationRepository");
+const StockReservationService_1 = require("./StockReservationService");
 const StockBalanceRepository_1 = require("../../infrastructure/sqlite/repositories/StockBalanceRepository");
 const double_entry_1 = require("../../domain/accounting/double-entry");
 const accounts_1 = require("../../shared/constants/accounts");
+const batch_expiry_rules_1 = require("../../domain/inventory/batch-expiry-rules");
+const BatchExpiryService_1 = require("./BatchExpiryService");
+const serial_rules_1 = require("../../domain/inventory/serial-rules");
+const SerialTrackingService_1 = require("./SerialTrackingService");
+const crypto_1 = require("crypto");
 class SalesService {
     saleRepo;
     productRepo;
@@ -133,13 +141,190 @@ class SalesService {
                     }
                 }
             }
+            // Sweep expired reservations before evaluating stock availability
+            try {
+                const resService = new StockReservationService_1.StockReservationService(db);
+                resService.checkAndExpireReservations(stockLoc?.business_id);
+            }
+            catch {
+                // Table or service may not be available in early isolated tests
+            }
+            let activeReservation = null;
+            if (request.reservationId) {
+                const resRepo = new StockReservationRepository_1.StockReservationRepository(db);
+                activeReservation = resRepo.findById(request.reservationId);
+                if (!activeReservation) {
+                    throw new Error(`Reservation '${request.reservationId}' not found.`);
+                }
+                if (activeReservation.status === 'cancelled') {
+                    throw new Error(`Reservation '${activeReservation.reservationNumber}' is cancelled and cannot be fulfilled.`);
+                }
+                if (activeReservation.status === 'fulfilled') {
+                    throw new Error(`Reservation '${activeReservation.reservationNumber}' is already completely fulfilled.`);
+                }
+                if (activeReservation.status === 'expired' || stock_reservation_rules_1.StockReservationRules.isExpired(activeReservation.expiresAt)) {
+                    throw new Error(`Reservation '${activeReservation.reservationNumber}' is expired.`);
+                }
+            }
             // Step A: Validate stock and deduct inventory
-            for (const item of request.items) {
+            const itemBatchAllocationsMap = new Map();
+            const itemSerialAllocationsMap = new Map();
+            for (let itemIdx = 0; itemIdx < request.items.length; itemIdx++) {
+                const item = request.items[itemIdx];
                 const product = this.productRepo.findById(item.productId);
                 if (!product) {
                     throw new Error(`Product ID ${item.productId} not found`);
                 }
                 const baseQtyNeeded = item.quantity * item.conversionFactor;
+                const baseQtyNeededScaled = Math.round(baseQtyNeeded * 1000);
+                // Check if product requires batch tracking
+                let batchSettings = null;
+                try {
+                    batchSettings = db.prepare('SELECT * FROM product_batch_settings WHERE product_id = ?').get(product.id);
+                }
+                catch {
+                    // Table may not exist in early tests
+                }
+                const requiresBatch = Boolean(batchSettings?.requires_batch);
+                let allocations = [];
+                if (item.batchAllocations && item.batchAllocations.length > 0) {
+                    for (const alloc of item.batchAllocations) {
+                        const batch = db.prepare('SELECT * FROM product_batches WHERE id = ?').get(alloc.batchId);
+                        if (!batch)
+                            throw new batch_expiry_rules_1.BatchNotFoundError(alloc.batchId);
+                        batch_expiry_rules_1.BatchExpiryRules.validateSaleBatchEligibility(batch, batchSettings ? {
+                            id: batchSettings.id,
+                            businessId: batchSettings.business_id,
+                            productId: batchSettings.product_id,
+                            requiresBatch: Boolean(batchSettings.requires_batch),
+                            requiresExpiry: Boolean(batchSettings.requires_expiry),
+                            expiryWarningDays: Number(batchSettings.expiry_warning_days),
+                            expirySalePolicy: batchSettings.expiry_sale_policy,
+                            batchCostPolicy: batchSettings.batch_cost_policy,
+                            createdAt: batchSettings.created_at,
+                            updatedAt: batchSettings.updated_at
+                        } : null);
+                        allocations.push({
+                            batchId: batch.id,
+                            batchNumber: batch.batch_number,
+                            expiryDate: batch.expiry_date,
+                            quantityScaled: alloc.quantityScaled,
+                            unitCostMinor: batch.cost_minor || 0
+                        });
+                    }
+                }
+                else if (item.batchId) {
+                    const batch = db.prepare('SELECT * FROM product_batches WHERE id = ?').get(item.batchId);
+                    if (!batch)
+                        throw new batch_expiry_rules_1.BatchNotFoundError(item.batchId);
+                    batch_expiry_rules_1.BatchExpiryRules.validateSaleBatchEligibility(batch, batchSettings ? {
+                        id: batchSettings.id,
+                        businessId: batchSettings.business_id,
+                        productId: batchSettings.product_id,
+                        requiresBatch: Boolean(batchSettings.requires_batch),
+                        requiresExpiry: Boolean(batchSettings.requires_expiry),
+                        expiryWarningDays: Number(batchSettings.expiry_warning_days),
+                        expirySalePolicy: batchSettings.expiry_sale_policy,
+                        batchCostPolicy: batchSettings.batch_cost_policy,
+                        createdAt: batchSettings.created_at,
+                        updatedAt: batchSettings.updated_at
+                    } : null);
+                    allocations.push({
+                        batchId: batch.id,
+                        batchNumber: batch.batch_number,
+                        expiryDate: batch.expiry_date,
+                        quantityScaled: baseQtyNeededScaled,
+                        unitCostMinor: batch.cost_minor || 0
+                    });
+                }
+                else if (requiresBatch && stockLoc) {
+                    // Automated FEFO allocation
+                    const batchService = new BatchExpiryService_1.BatchExpiryService(db);
+                    allocations = batchService.allocateBatchesForSale({
+                        businessId: stockLoc.business_id,
+                        productId: product.id,
+                        stockLocationId: stockLoc.id,
+                        requestedQuantityScaled: baseQtyNeededScaled
+                    });
+                }
+                if (requiresBatch && allocations.length === 0) {
+                    throw new batch_expiry_rules_1.BatchRequiredError(product.name);
+                }
+                if (allocations.length > 0) {
+                    const totalAllocated = allocations.reduce((s, a) => s + a.quantityScaled, 0);
+                    if (totalAllocated < baseQtyNeededScaled) {
+                        throw new batch_expiry_rules_1.InsufficientBatchStockError(allocations[0]?.batchNumber || 'Batch', baseQtyNeededScaled / 1000, totalAllocated / 1000);
+                    }
+                    if (stockLoc) {
+                        for (const alloc of allocations) {
+                            db.prepare(`
+                UPDATE batch_stock_balances
+                SET on_hand_scaled = on_hand_scaled - ?,
+                    updated_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')
+                WHERE business_id = ? AND batch_id = ? AND stock_location_id = ?
+              `).run(alloc.quantityScaled, stockLoc.business_id, alloc.batchId, stockLoc.id);
+                        }
+                    }
+                    itemBatchAllocationsMap.set(itemIdx, allocations);
+                }
+                // Check if product requires serial tracking
+                let serialSettings = null;
+                try {
+                    serialSettings = db.prepare('SELECT * FROM product_serial_settings WHERE product_id = ?').get(product.id);
+                }
+                catch {
+                    // Table may not exist in early tests
+                }
+                const requiresSerial = Boolean(serialSettings?.serial_tracking_required);
+                if (requiresSerial) {
+                    const expectedCount = Math.round(baseQtyNeededScaled / 1000);
+                    const serialService = new SerialTrackingService_1.SerialTrackingService(db);
+                    if (!item.serialNumbers || item.serialNumbers.length === 0) {
+                        throw new serial_rules_1.SerialRequiredError(product.name);
+                    }
+                    if (item.serialNumbers.length !== expectedCount) {
+                        throw new serial_rules_1.SerialCountMismatchError(product.name, expectedCount, item.serialNumbers.length);
+                    }
+                    const allocatedSerials = serialService.validateAndAllocateSaleSerials({
+                        businessId: stockLoc?.business_id || request.businessId || '00000000-0000-0000-0000-000000000001',
+                        productId: String(product.id),
+                        stockLocationId: stockLoc ? stockLoc.id : '00000000-0000-0000-0000-000000000001',
+                        quantityScaled: baseQtyNeededScaled,
+                        serials: item.serialNumbers
+                    });
+                    itemSerialAllocationsMap.set(itemIdx, allocatedSerials);
+                }
+                if (stockLoc) {
+                    const balanceRepo = new StockBalanceRepository_1.StockBalanceRepository(db);
+                    const balance = balanceRepo.getBalance(product.id, stockLoc.id, stockLoc.business_id);
+                    if (balance) {
+                        if (activeReservation) {
+                            const resLine = (activeReservation.lines || []).find((l) => String(l.productId) === String(product.id) && l.stockLocationId === stockLoc.id);
+                            if (resLine) {
+                                stock_reservation_rules_1.StockReservationRules.validateFulfillment(activeReservation, resLine, baseQtyNeededScaled);
+                                const resRepo = new StockReservationRepository_1.StockReservationRepository(db);
+                                resRepo.updateLineQuantities(resLine.id, baseQtyNeededScaled, 0);
+                                // Relieve reserved commitment
+                                balanceRepo.upsertDelta({
+                                    businessId: stockLoc.business_id,
+                                    productId: product.id,
+                                    stockLocationId: stockLoc.id,
+                                    onHandDeltaScaled: 0,
+                                    reservedDeltaScaled: -baseQtyNeededScaled
+                                });
+                                resLine.fulfilledQuantityScaled += baseQtyNeededScaled;
+                            }
+                            else {
+                                // Item is not on the reservation; evaluate against remaining available stock
+                                stock_reservation_rules_1.StockReservationRules.validateSaleAvailability(product.name, balance.onHandScaled, balance.reservedScaled, baseQtyNeededScaled);
+                            }
+                        }
+                        else {
+                            // Ordinary sale without reservation: strictly forbidden from consuming reserved stock
+                            stock_reservation_rules_1.StockReservationRules.validateSaleAvailability(product.name, balance.onHandScaled, balance.reservedScaled, baseQtyNeededScaled);
+                        }
+                    }
+                }
                 const validation = stock_rules_1.StockRules.validateAvailability(product.currentStock, baseQtyNeeded, false);
                 if (!validation.isValid) {
                     throw new Error(`Product '${product.name}' stock shortage: ${validation.message}`);
@@ -152,7 +337,7 @@ class SalesService {
                         businessId: stockLoc.business_id,
                         productId: product.id,
                         stockLocationId: stockLoc.id,
-                        onHandDeltaScaled: -Math.round(baseQtyNeeded * 1000)
+                        onHandDeltaScaled: -baseQtyNeededScaled
                     });
                 }
                 this.productRepo.logStockMovement({
@@ -163,9 +348,46 @@ class SalesService {
                     newStock,
                     stockLocationId: stockLoc?.id,
                     referenceType: 'SALE',
-                    reason: 'Retail sale deduction',
+                    reason: activeReservation ? `Reservation ${activeReservation.reservationNumber} fulfillment` : 'Retail sale deduction',
                     userId: request.cashierId
                 });
+                // Set batch_id on movement if batch allocated
+                if (allocations.length > 0) {
+                    try {
+                        db.prepare(`
+              UPDATE stock_movements
+              SET batch_id = ?
+              WHERE id = (SELECT MAX(id) FROM stock_movements WHERE product_id = ?)
+            `).run(allocations[0].batchId, product.id);
+                    }
+                    catch {
+                        // Safe fallback
+                    }
+                }
+                // Set serial_number_id on movement if serial allocated
+                const serialAllocations = itemSerialAllocationsMap.get(itemIdx);
+                if (serialAllocations && serialAllocations.length > 0) {
+                    try {
+                        db.prepare(`
+              UPDATE stock_movements
+              SET serial_number_id = ?
+              WHERE id = (SELECT MAX(id) FROM stock_movements WHERE product_id = ?)
+            `).run(serialAllocations[0].id, product.id);
+                    }
+                    catch {
+                        // Safe fallback
+                    }
+                }
+            }
+            // If fulfilling a reservation, evaluate whether it is now completely fulfilled
+            if (activeReservation) {
+                const resRepo = new StockReservationRepository_1.StockReservationRepository(db);
+                const refreshedRes = resRepo.findById(activeReservation.id);
+                if (refreshedRes) {
+                    const allFulfilled = (refreshedRes.lines || []).every((l) => (l.fulfilledQuantityScaled + l.releasedQuantityScaled) >= l.reservedQuantityScaled);
+                    const newStatus = allFulfilled ? 'fulfilled' : 'partially_fulfilled';
+                    resRepo.updateStatus(activeReservation.id, newStatus);
+                }
             }
             // Step B: Generate Invoice Number and save Sale
             const invoiceNumber = this.saleRepo.getNextInvoiceNumber();
@@ -186,9 +408,10 @@ class SalesService {
                 notes: request.notes
             });
             // Step C: Insert sale items
-            for (const item of calculation.items) {
+            for (let i = 0; i < calculation.items.length; i++) {
+                const item = calculation.items[i];
                 const product = this.productRepo.findById(item.productId);
-                this.saleRepo.createItem({
+                const saleItemId = this.saleRepo.createItem({
                     saleId,
                     productId: item.productId,
                     productName: product ? product.name : 'Unknown Product',
@@ -203,6 +426,26 @@ class SalesService {
                     lineTotal: item.lineTotal,
                     lineProfit: item.lineProfit
                 });
+                const allocations = itemBatchAllocationsMap.get(i);
+                if (allocations && allocations.length > 0 && saleItemId) {
+                    for (const alloc of allocations) {
+                        try {
+                            db.prepare(`
+                INSERT INTO sale_item_batches (
+                  id, business_id, sale_id, sale_item_id, product_id, batch_id, quantity_scaled, unit_cost_minor, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+              `).run((0, crypto_1.randomUUID)(), stockLoc?.business_id || '00000000-0000-0000-0000-000000000001', String(saleId), String(saleItemId), String(item.productId), alloc.batchId, alloc.quantityScaled, alloc.unitCostMinor || 0);
+                        }
+                        catch (sibErr) {
+                            console.error('[SaleItemBatches Insert Error]:', sibErr);
+                        }
+                    }
+                }
+                const serialAllocations = itemSerialAllocationsMap.get(i);
+                if (serialAllocations && serialAllocations.length > 0 && saleItemId) {
+                    const serialService = new SerialTrackingService_1.SerialTrackingService(db);
+                    serialService.claimSaleSerials(serialAllocations, saleId, saleItemId, stockLoc?.business_id || request.businessId || '00000000-0000-0000-0000-000000000001', request.cashierId);
+                }
             }
             // Step D: Update Customer Balance and Ledger if credit used
             if (request.customerId && splitPayment.customerBalanceChange > 0) {

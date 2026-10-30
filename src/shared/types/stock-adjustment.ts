@@ -34,6 +34,8 @@ export interface StockAdjustmentLine {
   variantId?: string | null;
   variantSku?: string | null;
   batchId?: string | null;
+  serialNumber?: string | null;
+  serialId?: string | null;
   systemQuantityScaled: number;
   countedQuantityScaled: number;
   differenceQuantityScaled: number;
@@ -82,6 +84,9 @@ export interface CreateStockAdjustmentLineInput {
   productId: string | number;
   variantId?: string | number | null;
   batchId?: string | null;
+  serialNumber?: string | null;
+  serialId?: string | null;
+  systemQuantityScaled?: number;
   countedQuantityScaled: number;
   unitId?: string | number;
   unitCostMinor?: number;

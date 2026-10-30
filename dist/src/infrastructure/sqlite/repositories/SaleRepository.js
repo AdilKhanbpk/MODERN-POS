@@ -62,7 +62,7 @@ class SaleRepository {
         const num = item.conversionNumerator || 1;
         const den = item.conversionDenominator || 1;
         // Insert into legacy sale_items
-        this.db.prepare(`
+        const itemInfo = this.db.prepare(`
       INSERT INTO sale_items (
         sale_id, product_id, product_name, product_barcode, unit_name,
         quantity, conversion_factor, unit_price, cost_price, line_discount,
@@ -79,6 +79,7 @@ class SaleRepository {
         conversion_numerator_snapshot, conversion_denominator_snapshot
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(item.saleId, item.productId, item.variantId || null, item.productName, sku, unitId, qtyScaled, item.unitPrice, item.lineDiscount, item.lineTax, item.costPrice, item.lineTotal, allocatedBillDiscount, taxRate, isTaxInclusive, lineProfit, unitName, num, den);
+        return Number(itemInfo.lastInsertRowid);
     }
     findById(id) {
         const row = this.db.prepare(`

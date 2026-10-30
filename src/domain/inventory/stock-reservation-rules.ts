@@ -66,7 +66,7 @@ export class CrossBranchReservationError extends Error {
 export class InsufficientAvailableStockError extends Error {
   constructor(productName: string, available: number, reserved: number, requested: number) {
     super(
-      `Cannot complete sale of ${requested} units for "${productName}". Available stock is only ${available} units (${reserved} units are committed to active reservations).`
+      `Insufficient stock: Cannot complete sale of ${requested} units for "${productName}". Available stock is only ${available} units (${reserved} units are committed to active reservations).`
     );
     this.name = 'InsufficientAvailableStockError';
   }
