@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockLocationRepository = void 0;
+const connection_1 = require("../connection");
 class StockLocationRepository {
     db;
-    constructor(db) {
+    constructor(db = (0, connection_1.getDatabase)()) {
         this.db = db;
     }
     create(dto, createdBy) {
@@ -88,15 +89,21 @@ class StockLocationRepository {
         return this.findById(id, businessId);
     }
     findById(id, businessId) {
-        const row = this.db
-            .prepare(`SELECT l.*,
-                p.name AS parent_name,
-                b.name AS branch_name
-         FROM stock_locations l
-         LEFT JOIN stock_locations p ON l.parent_location_id = p.id
-         LEFT JOIN branches b ON l.branch_id = b.id
-         WHERE l.id = ? AND l.business_id = ?`)
-            .get(id, businessId);
+        let sql = `
+      SELECT l.*,
+             p.name AS parent_name,
+             b.name AS branch_name
+      FROM stock_locations l
+      LEFT JOIN stock_locations p ON l.parent_location_id = p.id
+      LEFT JOIN branches b ON l.branch_id = b.id
+      WHERE l.id = ?
+    `;
+        const params = [id];
+        if (businessId) {
+            sql += ' AND l.business_id = ?';
+            params.push(businessId);
+        }
+        const row = this.db.prepare(sql).get(...params);
         if (!row)
             return null;
         return {

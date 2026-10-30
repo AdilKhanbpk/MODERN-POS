@@ -7,8 +7,10 @@ import {
 } from '../../../shared/types/stock-location';
 import { StockLocationRules } from '../../../domain/inventory/stock-location-rules';
 
+import { getDatabase } from '../connection';
+
 export class StockLocationRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database.Database = getDatabase()) {}
 
   public create(dto: CreateStockLocationDto, createdBy?: string | null): StockLocation {
     const id = crypto.randomUUID();
@@ -148,18 +150,22 @@ export class StockLocationRepository {
     return this.findById(id, businessId)!;
   }
 
-  public findById(id: string, businessId: string): StockLocation | null {
-    const row = this.db
-      .prepare(
-        `SELECT l.*,
-                p.name AS parent_name,
-                b.name AS branch_name
-         FROM stock_locations l
-         LEFT JOIN stock_locations p ON l.parent_location_id = p.id
-         LEFT JOIN branches b ON l.branch_id = b.id
-         WHERE l.id = ? AND l.business_id = ?`
-      )
-      .get(id, businessId) as any;
+  public findById(id: string, businessId?: string): StockLocation | null {
+    let sql = `
+      SELECT l.*,
+             p.name AS parent_name,
+             b.name AS branch_name
+      FROM stock_locations l
+      LEFT JOIN stock_locations p ON l.parent_location_id = p.id
+      LEFT JOIN branches b ON l.branch_id = b.id
+      WHERE l.id = ?
+    `;
+    const params: any[] = [id];
+    if (businessId) {
+      sql += ' AND l.business_id = ?';
+      params.push(businessId);
+    }
+    const row = this.db.prepare(sql).get(...params) as any;
 
     if (!row) return null;
 

@@ -1,6 +1,9 @@
 import { Role, Permission } from '../constants/roles-permissions';
 import { PaymentMethod, SaleStatus, StockMovementType, AccountType } from '../constants/accounts';
 
+import { ProductBarcode } from './barcode';
+import { ProductUnitConversion } from './unit-conversion';
+
 export { Role, Permission, PaymentMethod, SaleStatus, StockMovementType, AccountType };
 export * from './enterprise-core';
 export * from './onboarding';
@@ -109,7 +112,7 @@ export interface ProductVariant {
   isActive: boolean;
 }
 
-export interface ProductBarcode {
+export interface LegacyProductBarcode {
   id: number;
   productId: number;
   variantId?: number;
@@ -117,7 +120,7 @@ export interface ProductBarcode {
   unitId: number;
 }
 
-export interface ProductUnitConversion {
+export interface LegacyProductUnitConversion {
   id: number;
   productId: number;
   unitId: number;
@@ -154,9 +157,13 @@ export interface ProductSerialNumber {
 
 export interface Product {
   id: number;
+  businessId?: string;
+  allowNegativeStock?: boolean;
   sku: string;
   barcode: string;
   name: string;
+  description?: string;
+  productType?: string;
   categoryId: number;
   categoryName?: string;
   brandId?: number;
@@ -732,8 +739,11 @@ export interface SaleCalculationResult {
 
 export interface CreateSaleRequest {
   idempotencyKey?: string;
+  businessId?: string;
   customerId?: number | string;
   cashierId: number;
+  userId?: number | string;
+  userRole?: string;
   branchId?: string;
   counterId?: string;
   locationId?: number | string;
@@ -766,21 +776,21 @@ export interface SaleItem {
 }
 
 export interface PurchaseOrderItemInput {
-  productId: number;
-  variantId?: number;
-  unitId?: number;
+  productId: number | string;
+  variantId?: number | string;
+  unitId?: number | string;
   unitName?: string;
   quantity: number;
   conversionFactor: number;
   unitCostPrice: number;
   sellingPrice: number;
-  lineTotal: number;
+  lineTotal?: number;
 }
 
 export interface CreatePurchaseOrderRequest {
   supplierId: number | string;
   invoiceNumber: string;
-  locationId?: number;
+  locationId?: number | string;
   notes?: string;
   items: PurchaseOrderItemInput[];
   additionalCost: number;
@@ -835,4 +845,9 @@ export interface DailyZReport {
 }
 
 export * from './stock-location';
+export * from './stock-movement';
+export * from './stock-adjustment';
+export * from './stocktake';
+export * from './stock-transfer';
+
 

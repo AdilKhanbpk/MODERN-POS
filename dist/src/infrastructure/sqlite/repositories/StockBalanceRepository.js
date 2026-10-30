@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockBalanceRepository = void 0;
+const connection_1 = require("../connection");
 const stock_location_rules_1 = require("../../../domain/inventory/stock-location-rules");
 class StockBalanceRepository {
     db;
-    constructor(db) {
+    constructor(db = (0, connection_1.getDatabase)()) {
         this.db = db;
     }
     getBalance(productId, stockLocationId, businessId, variantId) {

@@ -15,6 +15,10 @@ import { applyMigrationV10 } from './010_barcodes_and_scale_profiles';
 import { applyMigrationV11 } from './011_customer_management_and_credit_ledger';
 import { applyMigrationV12 } from './012_supplier_management_and_payable_ledger';
 import { applyMigrationV13 } from './013_stock_locations_and_balances';
+import { applyMigrationV14 } from './014_stock_movement_ledger';
+import { applyMigrationV15 } from './015_stock_adjustments';
+import { applyMigrationV16 } from './016_stocktakes_and_physical_counting';
+import { applyMigrationV17 } from './017_stock_transfers_and_in_transit';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -80,6 +84,22 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 13) {
     applyMigrationV13(db);
+  }
+
+  if (currentVersion < 14) {
+    applyMigrationV14(db);
+  }
+
+  if (currentVersion < 15) {
+    applyMigrationV15(db);
+  }
+
+  if (currentVersion < 16) {
+    applyMigrationV16(db);
+  }
+
+  if (currentVersion < 17) {
+    applyMigrationV17(db);
   }
 }
 

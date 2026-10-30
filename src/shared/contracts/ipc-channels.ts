@@ -167,7 +167,49 @@ export const IPC_CHANNELS = {
   STOCK_LOCATIONS_GET_STOCK: 'stock-locations:get-stock',
   STOCK_LOCATIONS_GET_PRODUCT_STOCK: 'stock-locations:get-product-stock',
   STOCK_LOCATIONS_TRANSFER: 'stock-locations:transfer',
-  STOCK_LOCATIONS_MOVEMENTS: 'stock-locations:movements'
+  STOCK_LOCATIONS_MOVEMENTS: 'stock-locations:movements',
+
+  // Stock Adjustments (Prompt 13)
+  STOCK_ADJUSTMENTS_LIST: 'stock-adjustments:list',
+  STOCK_ADJUSTMENTS_GET_BY_ID: 'stock-adjustments:get-by-id',
+  STOCK_ADJUSTMENTS_CREATE: 'stock-adjustments:create',
+  STOCK_ADJUSTMENTS_SUBMIT: 'stock-adjustments:submit',
+  STOCK_ADJUSTMENTS_APPROVE: 'stock-adjustments:approve',
+  STOCK_ADJUSTMENTS_REJECT: 'stock-adjustments:reject',
+  STOCK_ADJUSTMENTS_CANCEL: 'stock-adjustments:cancel',
+  STOCK_ADJUSTMENTS_POST: 'stock-adjustments:post',
+  STOCK_ADJUSTMENTS_REVERSE: 'stock-adjustments:reverse',
+  STOCK_ADJUSTMENTS_RELOCATE_DAMAGED: 'stock-adjustments:relocate-damaged',
+  STOCK_ADJUSTMENTS_WRITE_OFF: 'stock-adjustments:write-off',
+  STOCK_ADJUSTMENTS_RETURN_SELLABLE: 'stock-adjustments:return-sellable',
+  STOCK_ADJUSTMENTS_GET_POLICY: 'stock-adjustments:get-policy',
+  STOCK_ADJUSTMENTS_UPDATE_POLICY: 'stock-adjustments:update-policy',
+
+  // Physical Stocktakes & Counting (Prompt 14)
+  STOCKTAKES_LIST: 'stocktakes:list',
+  STOCKTAKES_GET_BY_ID: 'stocktakes:get-by-id',
+  STOCKTAKES_CREATE: 'stocktakes:create',
+  STOCKTAKES_START: 'stocktakes:start',
+  STOCKTAKES_RECORD_COUNT: 'stocktakes:record-count',
+  STOCKTAKES_RESOLVE_LINE: 'stocktakes:resolve-line',
+  STOCKTAKES_SUBMIT_COUNTS: 'stocktakes:submit-counts',
+  STOCKTAKES_REVIEW: 'stocktakes:review',
+  STOCKTAKES_APPROVE: 'stocktakes:approve',
+  STOCKTAKES_POST: 'stocktakes:post',
+  STOCKTAKES_CANCEL: 'stocktakes:cancel',
+  STOCKTAKES_GET_REPORT: 'stocktakes:get-report',
+  STOCKTAKES_GET_POLICY: 'stocktakes:get-policy',
+  STOCKTAKES_UPDATE_POLICY: 'stocktakes:update-policy',
+  STOCKTAKES_CHECK_FREEZE: 'stocktakes:check-freeze',
+
+  // Stock Transfers & In-Transit Workflow (Prompt 15)
+  STOCK_TRANSFERS_LIST: 'stock-transfers:list',
+  STOCK_TRANSFERS_GET_BY_ID: 'stock-transfers:get-by-id',
+  STOCK_TRANSFERS_CREATE: 'stock-transfers:create',
+  STOCK_TRANSFERS_APPROVE: 'stock-transfers:approve',
+  STOCK_TRANSFERS_DISPATCH: 'stock-transfers:dispatch',
+  STOCK_TRANSFERS_RECEIVE: 'stock-transfers:receive',
+  STOCK_TRANSFERS_CANCEL: 'stock-transfers:cancel'
 };
 
 export interface ApiResponse<T = any> {

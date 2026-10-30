@@ -1,7 +1,7 @@
 import { PurchaseOrderItemInput } from '../../shared/types';
 
 export interface LandedCostItemResult {
-  productId: number;
+  productId: number | string;
   unitCostBeforeLanded: number;
   apportionedAdditionalCost: number;
   effectiveUnitCost: number;

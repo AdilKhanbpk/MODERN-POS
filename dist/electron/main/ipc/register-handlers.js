@@ -23,6 +23,9 @@ const BarcodeService_1 = require("../../../src/application/services/BarcodeServi
 const CustomerService_1 = require("../../../src/application/services/CustomerService");
 const SupplierService_1 = require("../../../src/application/services/SupplierService");
 const StockLocationService_1 = require("../../../src/application/services/StockLocationService");
+const StockAdjustmentService_1 = require("../../../src/application/services/StockAdjustmentService");
+const StocktakeService_1 = require("../../../src/application/services/StocktakeService");
+const StockTransferService_1 = require("../../../src/application/services/StockTransferService");
 const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
@@ -51,6 +54,9 @@ function registerIpcHandlers() {
     const customerService = new CustomerService_1.CustomerService((0, connection_1.getDatabase)());
     const supplierService = new SupplierService_1.SupplierService((0, connection_1.getDatabase)());
     const stockLocationService = new StockLocationService_1.StockLocationService((0, connection_1.getDatabase)());
+    const stockAdjustmentService = new StockAdjustmentService_1.StockAdjustmentService();
+    const stocktakeService = new StocktakeService_1.StocktakeService((0, connection_1.getDatabase)());
+    const stockTransferService = new StockTransferService_1.StockTransferService((0, connection_1.getDatabase)(), moduleManager);
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -529,5 +535,149 @@ function registerIpcHandlers() {
     handle(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, (payload) => {
         const bizId = payload.businessId || '00000000-0000-0000-0000-000000000001';
         return stockLocationService.getLocationMovements(payload.locationId, bizId, payload.limit);
+    });
+    // Stock Adjustments (Prompt 13)
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_LIST, (payload) => {
+        return stockAdjustmentService.listAdjustments(payload || {});
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_BY_ID, (payload) => {
+        return stockAdjustmentService.getAdjustmentById(payload.id);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_CREATE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.createAdjustment(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_SUBMIT, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.submitForApproval(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_APPROVE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.approveAdjustment(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_REJECT, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.rejectAdjustment(payload.id, payload.reason, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_CANCEL, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.cancelAdjustment(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_POST, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.postAdjustment(payload.id, actor, payload.options);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_REVERSE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.reverseAdjustment(payload.id, payload.reason, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_RELOCATE_DAMAGED, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.relocateToDamaged(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_WRITE_OFF, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.writeOffDamaged(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_RETURN_SELLABLE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.returnToSellable(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_POLICY, (payload) => {
+        const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+        return stockAdjustmentService.getApprovalPolicy(bizId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_UPDATE_POLICY, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockAdjustmentService.updateApprovalPolicy(payload.input, actor);
+    });
+    // Physical Stocktakes (Prompt 14)
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_LIST, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.listStocktakes(payload.filter, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_BY_ID, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.getStocktakeById(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CREATE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.createStocktake(payload.dto, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_START, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.startStocktake(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_RECORD_COUNT, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'counter', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.recordCount(payload.dto, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_RESOLVE_LINE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'supervisor', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.resolveDiscrepancy(payload.dto, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_SUBMIT_COUNTS, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'counter', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.submitCounts(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_REVIEW, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'supervisor', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.reviewStocktake(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_APPROVE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.approveStocktake(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_POST, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.postStocktake(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CANCEL, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.cancelStocktake(payload.id, payload.reason, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_REPORT, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stocktakeService.getStocktakeReport(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_POLICY, (payload) => {
+        const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+        return stocktakeService.getPolicy(bizId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_UPDATE_POLICY, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'owner', businessId: '00000000-0000-0000-0000-000000000001' };
+        const bizId = actor.businessId || '00000000-0000-0000-0000-000000000001';
+        return stocktakeService.updatePolicy(bizId, payload.policy, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CHECK_FREEZE, (payload) => {
+        return stocktakeService.checkLocationFreeze(payload.stockLocationId);
+    });
+    // Stock Transfers & In-Transit Workflow (Prompt 15)
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_LIST, (payload) => {
+        const filter = payload?.filter || { businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.listTransfers(filter);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_GET_BY_ID, (payload) => {
+        return stockTransferService.getTransferById(payload.id);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CREATE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.createTransfer(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_APPROVE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.approveTransfer(payload.id, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_DISPATCH, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.dispatchTransfer(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_RECEIVE, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.receiveTransfer(payload.input, actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, (payload) => {
+        const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
+        return stockTransferService.cancelTransfer(payload.id, payload.reason, actor);
     });
 }

@@ -42,6 +42,11 @@ export function getDatabase(): Database.Database {
   return dbInstance;
 }
 
+export function setDatabase(db: Database.Database | null): void {
+  dbInstance = db;
+}
+
+
 export function closeDatabase(): void {
   if (dbInstance) {
     dbInstance.close();

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Product, StockMovementType } from '../../../shared/types';
-import { Search, Plus, AlertTriangle, Edit3, ArrowUpDown, RefreshCw, X, Check, Warehouse, Package } from 'lucide-react';
+import { Search, Plus, AlertTriangle, Edit3, ArrowUpDown, RefreshCw, X, Check, Warehouse, Package, Layers, ClipboardList, ArrowRightLeft } from 'lucide-react';
 import { ProductFormModal } from '../../components/products/ProductFormModal';
 import { StockLocationsView } from '../../components/inventory/StockLocationsView';
+import { StockAdjustmentsView } from '../../components/inventory/StockAdjustmentsView';
+import { StocktakesView } from '../../components/inventory/StocktakesView';
+import { StockTransfersView } from '../../components/inventory/StockTransfersView';
 
 export const InventoryPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -10,7 +13,7 @@ export const InventoryPage: React.FC = () => {
   const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'products' | 'locations'>('products');
+  const [subTab, setSubTab] = useState<'products' | 'locations' | 'adjustments' | 'stocktakes' | 'transfers'>('products');
 
   // Modal state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -120,9 +123,51 @@ export const InventoryPage: React.FC = () => {
         >
           <Warehouse className="w-4 h-4" /> Stock Locations & Warehouses
         </button>
+        <button
+          onClick={() => setSubTab('adjustments')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'adjustments'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" /> Stock Adjustments & Damage
+        </button>
+        <button
+          onClick={() => setSubTab('stocktakes')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'stocktakes'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" /> Physical Stocktake
+        </button>
+        <button
+          onClick={() => setSubTab('transfers')}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            subTab === 'transfers'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <ArrowRightLeft className="w-4 h-4" /> Stock Transfers
+        </button>
       </div>
 
-      {subTab === 'locations' ? (
+      {subTab === 'transfers' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StockTransfersView />
+        </div>
+      ) : subTab === 'stocktakes' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StocktakesView />
+        </div>
+      ) : subTab === 'adjustments' ? (
+        <div className="flex-1 overflow-y-auto">
+          <StockAdjustmentsView />
+        </div>
+      ) : subTab === 'locations' ? (
         <div className="flex-1 overflow-y-auto">
           <StockLocationsView />
         </div>

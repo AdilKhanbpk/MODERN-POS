@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { getDatabase } from '../connection';
 import {
   EnterpriseStockBalance,
   LocationStockFilter
@@ -6,7 +7,7 @@ import {
 import { StockLocationRules } from '../../../domain/inventory/stock-location-rules';
 
 export class StockBalanceRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database.Database = getDatabase()) {}
 
   public getBalance(
     productId: string | number,

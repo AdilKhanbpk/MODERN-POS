@@ -5,6 +5,7 @@ import { AccountRepository } from '../../infrastructure/sqlite/repositories/Acco
 import { TransactionRunner } from '../../infrastructure/sqlite/transactions/transaction-runner';
 import { LandedCostCalculator } from '../../domain/purchases/landed-cost';
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
+import { StocktakeRules, StockLocationFrozenError, StocktakeSecurityError } from '../../domain/inventory/stocktake-rules';
 import { StockBalanceRepository } from '../../infrastructure/sqlite/repositories/StockBalanceRepository';
 import { DoubleEntryLedger } from '../../domain/accounting/double-entry';
 import { CreatePurchaseOrderRequest, PurchaseOrder } from '../../shared/types';
@@ -38,6 +39,7 @@ export class PurchaseService {
       request.additionalCost
     );
 
+    const targetDb = (this.purchaseRepo as any)?.db || (this.productRepo as any)?.db;
     return TransactionRunner.run((db) => {
       // Step A0: Resolve and validate Stock Location (Prompt 11)
       let stockLoc: any = null;
@@ -55,6 +57,36 @@ export class PurchaseService {
           isActive: Boolean(stockLoc.is_active),
           isReceivable: Boolean(stockLoc.is_receivable)
         });
+
+        // Prompt 14 Policy A: Check Location Freeze
+        try {
+          const frozenRow = db.prepare(`
+            SELECT id, stocktake_number FROM stocktakes
+            WHERE stock_location_id = ?
+              AND freeze_stock = 1
+              AND status IN ('in_progress', 'count_submitted', 'review', 'approved')
+            LIMIT 1
+          `).get(stockLoc.id) as { id: string; stocktake_number: string } | undefined;
+
+          if (frozenRow) {
+            StocktakeRules.validateLocationFreeze(
+              true,
+              stockLoc.name,
+              frozenRow.stocktake_number,
+              Boolean((request as any).overrideFreeze || (request as any).overrideLocationFreeze),
+              (request as any).userRole || (request as any).role
+            );
+          }
+        } catch (err: any) {
+          if (
+            err instanceof StockLocationFrozenError ||
+            err?.name === 'StockLocationFrozenError' ||
+            err instanceof StocktakeSecurityError ||
+            err?.name === 'StocktakeSecurityError'
+          ) {
+            throw err;
+          }
+        }
       }
 
       // 1. Create Purchase Order
@@ -200,7 +232,7 @@ export class PurchaseService {
       }
 
       return poId;
-    });
+    }, targetDb);
   }
 
   public listPurchaseOrders(): PurchaseOrder[] {

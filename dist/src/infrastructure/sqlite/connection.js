@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDatabasePath = getDatabasePath;
 exports.initDatabase = initDatabase;
 exports.getDatabase = getDatabase;
+exports.setDatabase = setDatabase;
 exports.closeDatabase = closeDatabase;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
@@ -41,6 +42,9 @@ function getDatabase() {
         return initDatabase();
     }
     return dbInstance;
+}
+function setDatabase(db) {
+    dbInstance = db;
 }
 function closeDatabase() {
     if (dbInstance) {

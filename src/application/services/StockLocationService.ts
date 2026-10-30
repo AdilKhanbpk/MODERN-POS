@@ -3,7 +3,8 @@ import {
   StockLocation,
   CreateStockLocationDto,
   UpdateStockLocationDto,
-  StockTransfer,
+  LegacyStockTransfer as StockTransfer,
+  LegacyStockTransferLine as StockTransferLine,
   CreateStockTransferDto,
   LocationStockFilter,
   EnterpriseStockBalance

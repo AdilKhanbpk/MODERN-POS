@@ -22,7 +22,7 @@ class ProductRepository {
              p.current_stock as currentStock, p.min_stock_level as minStockLevel,
              p.reorder_level_scaled as reorderLevelScaled, p.tracking_mode as trackingMode,
              p.tax_rate as taxRate, p.is_tax_inclusive as isTaxInclusive,
-             p.is_active as isActive, p.created_at as createdAt
+             p.is_active as isActive, p.allow_negative_stock as allowNegativeStock, p.created_at as createdAt
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN brands b ON p.brand_id = b.id
@@ -48,7 +48,7 @@ class ProductRepository {
              p.current_stock as currentStock, p.min_stock_level as minStockLevel,
              p.reorder_level_scaled as reorderLevelScaled, p.tracking_mode as trackingMode,
              p.tax_rate as taxRate, p.is_tax_inclusive as isTaxInclusive,
-             p.is_active as isActive, p.created_at as createdAt
+             p.is_active as isActive, p.allow_negative_stock as allowNegativeStock, p.created_at as createdAt
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN brands b ON p.brand_id = b.id
@@ -99,7 +99,7 @@ class ProductRepository {
              p.cost_price as costPrice, p.selling_price as sellingPrice,
              p.current_stock as currentStock, p.min_stock_level as minStockLevel,
              p.tax_rate as taxRate, p.is_tax_inclusive as isTaxInclusive,
-             p.is_active as isActive, p.created_at as createdAt
+             p.is_active as isActive, p.allow_negative_stock as allowNegativeStock, p.created_at as createdAt
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN brands b ON p.brand_id = b.id
@@ -132,15 +132,37 @@ class ProductRepository {
         id, business_id, category_id, brand_id, name, sku, barcode, base_unit, base_unit_id,
         cost_price, selling_price, default_cost_minor, default_sale_price_minor,
         current_stock, min_stock_level, reorder_level_scaled, tracking_mode,
-        tax_rate, is_tax_inclusive, is_active
+        tax_rate, is_tax_inclusive, is_active, allow_negative_stock
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(productId, businessId, product.categoryId || 1, product.brandId || null, product.name, product.sku, product.barcode, product.baseUnit || 'Piece', baseUnitId, defaultCost, defaultPrice, defaultCost, defaultPrice, product.currentStock || 0, reorder, reorder, product.trackingMode || 'STANDARD', product.taxRate || 0, product.isTaxInclusive ? 1 : 0, product.isActive !== false ? 1 : 0);
-        // Initial stock balance projection in location 1
-        this.db.prepare(`
-      INSERT OR REPLACE INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
-      VALUES (?, 0, 1, 0, ?)
-    `).run(productId, product.currentStock || 0);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(productId, businessId, product.categoryId || 1, product.brandId || null, product.name, product.sku, product.barcode, product.baseUnit || 'Piece', baseUnitId, defaultCost, defaultPrice, defaultCost, defaultPrice, product.currentStock || 0, reorder, reorder, product.trackingMode || 'STANDARD', product.taxRate || 0, product.isTaxInclusive ? 1 : 0, product.isActive !== false ? 1 : 0, product.allowNegativeStock || product.allow_negative_stock ? 1 : 0);
+        // Initial stock balance projection
+        try {
+            const cols = this.db.prepare("PRAGMA table_info('stock_balances')").all();
+            if (cols.some((c) => c.name === 'stock_location_id')) {
+                const defaultLoc = this.db
+                    .prepare('SELECT id, business_id FROM stock_locations WHERE is_default = 1 AND is_active = 1 LIMIT 1')
+                    .get();
+                if (defaultLoc) {
+                    const scaled = Math.round((product.currentStock || 0) * 1000);
+                    this.db
+                        .prepare(`INSERT OR REPLACE INTO stock_balances (
+                id, business_id, product_id, variant_id, stock_location_id,
+                on_hand_scaled, reserved_scaled, available_scaled
+              ) VALUES (?, ?, ?, NULL, ?, ?, 0, ?)`)
+                        .run(`bal-${productId}-${defaultLoc.id}`, defaultLoc.business_id, String(productId), defaultLoc.id, scaled, scaled);
+                }
+            }
+            else if (cols.some((c) => c.name === 'location_id')) {
+                this.db
+                    .prepare(`INSERT OR REPLACE INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
+             VALUES (?, 0, 1, 0, ?)`)
+                    .run(productId, product.currentStock || 0);
+            }
+        }
+        catch {
+            // Ignore if table not present
+        }
         return productId;
     }
     update(product) {
@@ -169,22 +191,30 @@ class ProductRepository {
     logStockMovement(movement) {
         const locId = movement.locationId || 1;
         const stockLocId = movement.stockLocationId || null;
+        const direction = (movement.newStock < movement.previousStock || movement.movementType === 'SALE' || movement.movementType === 'ADJUSTMENT_DECREASE' || movement.movementType === 'DAMAGE_WRITEOFF' || movement.quantity < 0) ? 'OUT' : 'IN';
+        const qtyScaled = Math.max(1, Math.round(Math.abs(movement.quantity) * 1000));
         this.db.prepare(`
       INSERT INTO stock_movements (
         product_id, variant_id, location_id, stock_location_id, batch_id, serial_id,
-        movement_type, quantity, quantity_base_scaled,
+        movement_type, direction, quantity, quantity_scaled, quantity_base_scaled,
         previous_stock, new_stock, reference_type, reference_id,
         source_type, source_id, reason, user_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(movement.productId, movement.variantId || null, locId, stockLocId, movement.batchId || null, movement.serialId || null, movement.movementType, movement.quantity, movement.quantity, movement.previousStock, movement.newStock, movement.referenceType || null, movement.referenceId || null, movement.referenceType || 'MANUAL', movement.referenceId || 0, movement.reason || null, movement.userId || null);
-        // Atomically maintain stock_balances projection table
-        this.db.prepare(`
-      INSERT INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(product_id, variant_id, location_id, batch_id) DO UPDATE SET
-        quantity_base_scaled = ?
-    `).run(movement.productId, movement.variantId || 0, locId, movement.batchId || 0, movement.newStock, movement.newStock);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(movement.productId, movement.variantId || null, locId, stockLocId, movement.batchId || null, movement.serialId || null, movement.movementType, direction, movement.quantity, qtyScaled, movement.quantity, movement.previousStock, movement.newStock, movement.referenceType || 'MANUAL', String(movement.referenceId || '0'), movement.referenceType || 'MANUAL', movement.referenceId || 0, movement.reason || null, movement.userId || null);
+        // Atomically maintain legacy stock_balances projection table if table structure matches
+        try {
+            const cols = this.db.prepare("PRAGMA table_info('stock_balances')").all();
+            if (cols.some((c) => c.name === 'location_id')) {
+                this.db.prepare(`
+          INSERT INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(product_id, variant_id, location_id, batch_id) DO UPDATE SET
+            quantity_base_scaled = ?
+        `).run(movement.productId, movement.variantId || 0, locId, movement.batchId || 0, movement.newStock, movement.newStock);
+            }
+        }
+        catch { }
     }
     // --- Multi-Barcode & Packaging Unit Conversions ---
     addBarcode(productId, barcode, unitId, variantId) {

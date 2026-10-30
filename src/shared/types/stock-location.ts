@@ -87,7 +87,7 @@ export type StockBalanceRecord = EnterpriseStockBalance;
 export type TransferType = 'INTERNAL_LOCATION' | 'BRANCH_TRANSFER';
 export type TransferStatus = 'DRAFT' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
 
-export interface StockTransfer {
+export interface LegacyStockTransfer {
   id: string;
   businessId: string;
   transferNumber: string;
@@ -101,7 +101,7 @@ export interface StockTransfer {
   createdBy?: string | null;
   createdAt: string;
   completedAt?: string | null;
-  items?: StockTransferLine[];
+  items?: LegacyStockTransferLine[];
   // Joined names
   sourceLocationName?: string;
   destinationLocationName?: string;
@@ -109,7 +109,7 @@ export interface StockTransfer {
   destinationBranchName?: string;
 }
 
-export interface StockTransferLine {
+export interface LegacyStockTransferLine {
   id: string;
   transferId: string;
   productId: string | number;

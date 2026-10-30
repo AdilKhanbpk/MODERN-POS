@@ -198,6 +198,49 @@ exports.posApi = {
         getProductStock: (productId, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_GET_PRODUCT_STOCK, { productId, businessId }),
         transfer: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_TRANSFER, { dto, actor }),
         getMovements: (locationId, businessId, limit) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, { locationId, businessId, limit })
+    },
+    stockAdjustments: {
+        list: (filters) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_LIST, filters),
+        getById: (id) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_BY_ID, { id }),
+        create: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_CREATE, { input, actor }),
+        submitForApproval: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_SUBMIT, { id, actor }),
+        approve: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_APPROVE, { id, actor }),
+        reject: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_REJECT, { id, reason, actor }),
+        cancel: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_CANCEL, { id, actor }),
+        post: (id, actor, options) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_POST, { id, actor, options }),
+        reverse: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_REVERSE, { id, reason, actor }),
+        relocateDamaged: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_RELOCATE_DAMAGED, { input, actor }),
+        writeOffDamaged: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_WRITE_OFF, { input, actor }),
+        returnToSellable: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_RETURN_SELLABLE, { input, actor }),
+        getPolicy: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_POLICY, { businessId }),
+        updatePolicy: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_ADJUSTMENTS_UPDATE_POLICY, { input, actor })
+    },
+    stocktakes: {
+        list: (filter, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_LIST, { filter, actor }),
+        getById: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_BY_ID, { id, actor }),
+        create: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CREATE, { dto, actor }),
+        start: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_START, { id, actor }),
+        recordCount: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_RECORD_COUNT, { dto, actor }),
+        resolveLine: (dto, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_RESOLVE_LINE, { dto, actor }),
+        submitCounts: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_SUBMIT_COUNTS, { id, actor }),
+        review: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_REVIEW, { id, actor }),
+        approve: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_APPROVE, { id, actor }),
+        post: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_POST, { id, actor }),
+        cancel: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CANCEL, { id, reason, actor }),
+        getReport: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_REPORT, { id, actor }),
+        getPolicy: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_GET_POLICY, { businessId }),
+        updatePolicy: (policy, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_UPDATE_POLICY, { policy, actor }),
+        checkFreeze: (stockLocationId) => invoke(ipc_channels_1.IPC_CHANNELS.STOCKTAKES_CHECK_FREEZE, { stockLocationId })
+    },
+    // Stock Transfers & In-Transit Workflow (Prompt 15)
+    stockTransfers: {
+        list: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_LIST, { filter }),
+        getById: (id) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_GET_BY_ID, { id }),
+        create: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CREATE, { input, actor }),
+        approve: (id, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_APPROVE, { id, actor }),
+        dispatch: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_DISPATCH, { input, actor }),
+        receive: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_RECEIVE, { input, actor }),
+        cancel: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, { id, reason, actor })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);

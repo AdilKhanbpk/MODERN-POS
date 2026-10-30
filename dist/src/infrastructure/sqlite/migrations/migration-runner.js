@@ -20,6 +20,10 @@ const _010_barcodes_and_scale_profiles_1 = require("./010_barcodes_and_scale_pro
 const _011_customer_management_and_credit_ledger_1 = require("./011_customer_management_and_credit_ledger");
 const _012_supplier_management_and_payable_ledger_1 = require("./012_supplier_management_and_payable_ledger");
 const _013_stock_locations_and_balances_1 = require("./013_stock_locations_and_balances");
+const _014_stock_movement_ledger_1 = require("./014_stock_movement_ledger");
+const _015_stock_adjustments_1 = require("./015_stock_adjustments");
+const _016_stocktakes_and_physical_counting_1 = require("./016_stocktakes_and_physical_counting");
+const _017_stock_transfers_and_in_transit_1 = require("./017_stock_transfers_and_in_transit");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -70,6 +74,18 @@ function runMigrations(db) {
     }
     if (currentVersion < 13) {
         (0, _013_stock_locations_and_balances_1.applyMigrationV13)(db);
+    }
+    if (currentVersion < 14) {
+        (0, _014_stock_movement_ledger_1.applyMigrationV14)(db);
+    }
+    if (currentVersion < 15) {
+        (0, _015_stock_adjustments_1.applyMigrationV15)(db);
+    }
+    if (currentVersion < 16) {
+        (0, _016_stocktakes_and_physical_counting_1.applyMigrationV16)(db);
+    }
+    if (currentVersion < 17) {
+        (0, _017_stock_transfers_and_in_transit_1.applyMigrationV17)(db);
     }
 }
 function applyMigrationV1(db) {

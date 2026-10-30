@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../src/infrastructure/sqlite/migrations/migration-runner';
+import { setDatabase } from '../../src/infrastructure/sqlite/connection';
 import { StockLocationService } from '../../src/application/services/StockLocationService';
 import { StockLocationRepository } from '../../src/infrastructure/sqlite/repositories/StockLocationRepository';
 import { StockBalanceRepository } from '../../src/infrastructure/sqlite/repositories/StockBalanceRepository';
 import { ProductRepository } from '../../src/infrastructure/sqlite/repositories/ProductRepository';
+import { SaleRepository } from '../../src/infrastructure/sqlite/repositories/SaleRepository';
+import { CustomerRepository } from '../../src/infrastructure/sqlite/repositories/CustomerRepository';
+import { SupplierRepository } from '../../src/infrastructure/sqlite/repositories/SupplierRepository';
+import { AccountRepository } from '../../src/infrastructure/sqlite/repositories/AccountRepository';
+import { PurchaseRepository } from '../../src/infrastructure/sqlite/repositories/PurchaseRepository';
 import { SalesService } from '../../src/application/services/SalesService';
 import { PurchaseService } from '../../src/application/services/PurchaseService';
 import { OnboardingService } from '../../src/application/services/OnboardingService';
@@ -37,17 +43,25 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
   beforeEach(() => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
+    setDatabase(db);
     runMigrations(db);
 
     locationService = new StockLocationService(db);
     locationRepo = new StockLocationRepository(db);
     balanceRepo = new StockBalanceRepository(db);
     productRepo = new ProductRepository(db);
-    salesService = new SalesService(db);
-    purchaseService = new PurchaseService(undefined, productRepo);
+    const saleRepo = new SaleRepository(db);
+    const customerRepo = new CustomerRepository(db);
+    const supplierRepo = new SupplierRepository(db);
+    const accountRepo = new AccountRepository(db);
+    const purchaseRepo = new PurchaseRepository(db);
+
+    salesService = new SalesService(saleRepo, productRepo, customerRepo, accountRepo);
+    purchaseService = new PurchaseService(purchaseRepo, productRepo, supplierRepo, accountRepo);
   });
 
   afterEach(() => {
+    setDatabase(null);
     db.close();
   });
 
@@ -66,9 +80,14 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         businessType: 'SUPERMARKET',
         regionalSettings: {
           currencyCode: 'PKR',
-          currencySymbol: 'Rs.',
-          timeZone: 'Asia/Karachi',
-          dateFormat: 'YYYY-MM-DD'
+          currencySymbol: 'Rs. ',
+          currencyDecimals: 2,
+          timezone: 'Asia/Karachi',
+          dateFormat: 'DD/MM/YYYY',
+          timeFormat: '12h',
+          numberFormat: 'standard',
+          receiptLanguage: 'en',
+          defaultMeasurementUnit: 'Piece'
         },
         branch: {
           name: 'Clifton Branch',
@@ -86,9 +105,11 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         modules: {
           enabledModuleCodes: ['inventory_ledger', 'purchases', 'sales']
         },
-        receipt: {
-          headerText: 'Welcome',
-          footerText: 'Thank you'
+        receiptSettings: {
+          displayName: 'SuperMart Karachi',
+          heading: 'TAX INVOICE',
+          footerMessage: 'Thank you',
+          paperWidth: '80mm'
         }
       });
 
@@ -109,8 +130,8 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
     });
 
     it('sells from the default location without selecting a location for every sale', () => {
-      // Create product with initial stock in default location
-      const product = productRepo.create({
+      // Create product with initial stock in default location (creates 20,000 in stock_balances)
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Basmati Rice 5kg',
         sku: 'RICE-05',
@@ -120,26 +141,19 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         currentStock: 20
       });
 
-      balanceRepo.upsertDelta({
-        businessId,
-        productId: product.id,
-        stockLocationId: defaultLocationId,
-        onHandDeltaScaled: 20000
-      });
-
       // Sell without providing locationId
       const sale = salesService.createSale({
         cashierId: 1,
         branchId,
         counterId,
         amountPaid: 80000,
-        items: [{ productId: product.id, quantity: 2, unitPrice: 80000, conversionFactor: 1 }]
+        items: [{ productId, quantity: 2, unitPrice: 80000, conversionFactor: 1 }]
       });
 
       expect(sale.id).toBeDefined();
 
       // Verify stock deducted from default location in stock_balances
-      const bal = balanceRepo.getBalance(product.id, defaultLocationId, businessId);
+      const bal = balanceRepo.getBalance(productId, defaultLocationId, businessId);
       expect(bal?.onHandScaled).toBe(18000); // 20,000 - 2,000 = 18,000
       expect(bal?.availableScaled).toBe(18000);
     });
@@ -313,8 +327,8 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
     it('rejects cross-business location references', () => {
       const biz2Id = crypto.randomUUID();
       db.prepare(`
-        INSERT INTO businesses (id, name, code, tax_number)
-        VALUES (?, 'Competitor Ltd', 'COMP-01', 'TAX-999')
+        INSERT INTO businesses (id, name, business_type)
+        VALUES (?, 'Competitor Ltd', 'RETAIL')
       `).run(biz2Id);
 
       const foreignBranchId = crypto.randomUUID();
@@ -363,7 +377,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Dented Soda Can 250ml',
         sku: 'SODA-DENT',
@@ -375,7 +389,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
 
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: damagedLoc.id,
         onHandDeltaScaled: 10000
       });
@@ -387,20 +401,20 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
           branchId,
           locationId: damagedLoc.id,
           amountPaid: 5000,
-          items: [{ productId: product.id, quantity: 1, unitPrice: 5000, conversionFactor: 1 }]
+          items: [{ productId, quantity: 1, unitPrice: 5000, conversionFactor: 1 }]
         });
       }).toThrowError(LocationNotSellableError);
     });
 
     it('excludes damaged and quarantine locations from sellable stock totals', () => {
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Chocolate Biscuit 100g',
         sku: 'CHOC-100',
         barcode: '896000003001',
         costPrice: 4000,
         sellingPrice: 6000,
-        currentStock: 100
+        currentStock: 0
       });
 
       const damagedLoc = locationService.createLocation(
@@ -418,19 +432,19 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
       // Put 80 units in default sellable floor, 20 units in damaged cage
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: defaultLocationId,
         onHandDeltaScaled: 80000
       });
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: damagedLoc.id,
         onHandDeltaScaled: 20000
       });
 
-      const totalBranch = balanceRepo.getBranchTotalOnHand(branchId, product.id, businessId);
-      const sellableBranch = balanceRepo.getBranchSellableOnHand(branchId, product.id, businessId);
+      const totalBranch = balanceRepo.getBranchTotalOnHand(branchId, productId, businessId);
+      const sellableBranch = balanceRepo.getBranchSellableOnHand(branchId, productId, businessId);
 
       expect(totalBranch).toBe(100000); // 100 scaled
       expect(sellableBranch).toBe(80000); // Only 80 sellable! Damaged 20 excluded
@@ -449,9 +463,13 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const supplierRow = db.prepare('SELECT id FROM suppliers LIMIT 1').get() as { id: any };
+      const supplierId = '00000000-0000-0000-0000-000000000010';
+      db.prepare(`
+        INSERT OR IGNORE INTO suppliers (id, business_id, supplier_code, name, phone, balance)
+        VALUES (?, ?, 'SUP-TEST-01', 'Test Supplier', '12345', 0)
+      `).run(supplierId, businessId);
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Display Glass Vase',
         sku: 'VASE-01',
@@ -463,12 +481,12 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
 
       expect(() => {
         purchaseService.createPurchaseOrder({
-          supplierId: supplierRow.id,
+          supplierId,
           invoiceNumber: 'INV-REC-FAIL-01',
           locationId: showroom.id,
           additionalCost: 0,
           amountPaid: 15000,
-          items: [{ productId: product.id, quantity: 1, unitCostPrice: 15000, sellingPrice: 25000, conversionFactor: 1 }]
+          items: [{ productId, quantity: 1, unitCostPrice: 15000, sellingPrice: 25000, conversionFactor: 1 }]
         });
       }).toThrowError(LocationNotReceivableError);
     });
@@ -490,7 +508,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Cooking Oil 1L',
         sku: 'OIL-01',
@@ -502,7 +520,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
 
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: tempWh.id,
         onHandDeltaScaled: 15000
       });
@@ -525,7 +543,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Microwave Oven',
         sku: 'MW-01',
@@ -538,7 +556,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
       // Insert balance with 0 on hand but 2 reserved
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: reserveLoc.id,
         onHandDeltaScaled: 0,
         reservedDeltaScaled: 2000
@@ -594,25 +612,25 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Sugar 50kg Sack',
         sku: 'SUGAR-50K',
         barcode: '896000007001',
         costPrice: 600000,
         sellingPrice: 750000,
-        currentStock: 100
+        currentStock: 0
       });
 
       // Put 100 sacks in Storeroom
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: storeroom.id,
         onHandDeltaScaled: 100000
       });
 
-      const initialBranchTotal = balanceRepo.getBranchTotalOnHand(branchId, product.id, businessId);
+      const initialBranchTotal = balanceRepo.getBranchTotalOnHand(branchId, productId, businessId);
       expect(initialBranchTotal).toBe(100000);
 
       // Transfer 30 sacks from Storeroom to Main Store Floor
@@ -626,7 +644,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
           notes: 'Replenishing front shelves for morning rush',
           items: [
             {
-              productId: product.id,
+              productId,
               quantityScaled: 30000
             }
           ]
@@ -638,19 +656,19 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
       expect(transfer.transferType).toBe('INTERNAL_LOCATION');
 
       // Check Balances
-      const storeroomBal = balanceRepo.getBalance(product.id, storeroom.id, businessId);
-      const floorBal = balanceRepo.getBalance(product.id, defaultLocationId, businessId);
+      const storeroomBal = balanceRepo.getBalance(productId, storeroom.id, businessId);
+      const floorBal = balanceRepo.getBalance(productId, defaultLocationId, businessId);
 
       expect(storeroomBal?.onHandScaled).toBe(70000); // 100 - 30 = 70
       expect(floorBal?.onHandScaled).toBe(30000); // 0 + 30 = 30
 
       // Rule 9: Total branch stock must remain unchanged!
-      const finalBranchTotal = balanceRepo.getBranchTotalOnHand(branchId, product.id, businessId);
+      const finalBranchTotal = balanceRepo.getBranchTotalOnHand(branchId, productId, businessId);
       expect(finalBranchTotal).toBe(initialBranchTotal);
 
       // Rule 8: Paired Stock Movements created
       const movements = db
-        .prepare('SELECT * FROM stock_movements WHERE transfer_id = ? ORDER BY id ASC')
+        .prepare('SELECT * FROM stock_movements WHERE transfer_id = ? ORDER BY rowid ASC')
         .all(transfer.id) as any[];
 
       expect(movements.length).toBe(2);
@@ -715,7 +733,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
         actor
       );
 
-      const product = productRepo.create({
+      const productId = productRepo.create({
         categoryId: 1,
         name: 'Frozen Beef Patties',
         sku: 'BEEF-PATTY',
@@ -727,7 +745,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
 
       balanceRepo.upsertDelta({
         businessId,
-        productId: product.id,
+        productId,
         stockLocationId: loc.id,
         onHandDeltaScaled: 45000,
         reservedDeltaScaled: 5000
@@ -741,7 +759,7 @@ describe('Prompt 11 — Stock Locations and Warehouse Management', () => {
       expect(persistedLoc).not.toBeNull();
       expect(persistedLoc!.code).toBe('VAULT-COLD');
 
-      const persistedBal = newBalRepo.getBalance(product.id, loc.id, businessId);
+      const persistedBal = newBalRepo.getBalance(productId, loc.id, businessId);
       expect(persistedBal).not.toBeNull();
       expect(persistedBal!.onHandScaled).toBe(45000);
       expect(persistedBal!.reservedScaled).toBe(5000);

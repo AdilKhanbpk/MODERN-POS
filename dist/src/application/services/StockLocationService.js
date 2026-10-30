@@ -38,13 +38,15 @@ class StockLocationService {
         // 3. Hierarchy validation
         if (dto.parentLocationId) {
             stock_location_rules_1.StockLocationRules.validateHierarchy(null, dto.parentLocationId, (pId) => {
-                const row = this.locationRepo.findById(pId, dto.businessId);
+                const row = this.db
+                    .prepare('SELECT id, business_id, branch_id, parent_location_id FROM stock_locations WHERE id = ?')
+                    .get(pId);
                 return row
                     ? {
                         id: row.id,
-                        businessId: row.businessId,
-                        branchId: row.branchId,
-                        parentLocationId: row.parentLocationId
+                        businessId: row.business_id,
+                        branchId: row.branch_id,
+                        parentLocationId: row.parent_location_id
                     }
                     : null;
             }, dto.branchId, dto.businessId);
@@ -67,13 +69,15 @@ class StockLocationService {
         // Hierarchy validation if updating parent
         if (dto.parentLocationId !== undefined && dto.parentLocationId !== current.parentLocationId) {
             stock_location_rules_1.StockLocationRules.validateHierarchy(id, dto.parentLocationId, (pId) => {
-                const row = this.locationRepo.findById(pId, actor.businessId);
+                const row = this.db
+                    .prepare('SELECT id, business_id, branch_id, parent_location_id FROM stock_locations WHERE id = ?')
+                    .get(pId);
                 return row
                     ? {
                         id: row.id,
-                        businessId: row.businessId,
-                        branchId: row.branchId,
-                        parentLocationId: row.parentLocationId
+                        businessId: row.business_id,
+                        branchId: row.branch_id,
+                        parentLocationId: row.parent_location_id
                     }
                     : null;
             }, current.branchId, actor.businessId);
@@ -131,6 +135,10 @@ class StockLocationService {
         const sourceLoc = this.getLocationById(dto.sourceLocationId, actor.businessId);
         const destLoc = this.getLocationById(dto.destinationLocationId, actor.businessId);
         const isInternal = sourceLoc.branchId === destLoc.branchId;
+        // Rule 10: Disguising inter-branch transfers as internal transfers is strictly rejected
+        if (!isInternal && dto.transferType !== 'BRANCH_TRANSFER') {
+            throw new stock_location_rules_1.CrossBranchTransferMismatchError();
+        }
         const transferType = isInternal ? 'INTERNAL_LOCATION' : 'BRANCH_TRANSFER';
         // Validation
         if (isInternal) {

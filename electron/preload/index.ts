@@ -354,6 +354,88 @@ export const posApi = {
       invoke(IPC_CHANNELS.STOCK_LOCATIONS_TRANSFER, { dto, actor }),
     getMovements: (locationId: string, businessId?: string, limit?: number): Promise<any[]> =>
       invoke(IPC_CHANNELS.STOCK_LOCATIONS_MOVEMENTS, { locationId, businessId, limit })
+  },
+
+  stockAdjustments: {
+    list: (filters?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_LIST, filters),
+    getById: (id: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_BY_ID, { id }),
+    create: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_CREATE, { input, actor }),
+    submitForApproval: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_SUBMIT, { id, actor }),
+    approve: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_APPROVE, { id, actor }),
+    reject: (id: string, reason: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_REJECT, { id, reason, actor }),
+    cancel: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_CANCEL, { id, actor }),
+    post: (id: string, actor?: any, options?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_POST, { id, actor, options }),
+    reverse: (id: string, reason: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_REVERSE, { id, reason, actor }),
+    relocateDamaged: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_RELOCATE_DAMAGED, { input, actor }),
+    writeOffDamaged: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_WRITE_OFF, { input, actor }),
+    returnToSellable: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_RETURN_SELLABLE, { input, actor }),
+    getPolicy: (businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_GET_POLICY, { businessId }),
+    updatePolicy: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_ADJUSTMENTS_UPDATE_POLICY, { input, actor })
+  },
+
+  stocktakes: {
+    list: (filter?: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_LIST, { filter, actor }),
+    getById: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_GET_BY_ID, { id, actor }),
+    create: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_CREATE, { dto, actor }),
+    start: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_START, { id, actor }),
+    recordCount: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_RECORD_COUNT, { dto, actor }),
+    resolveLine: (dto: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_RESOLVE_LINE, { dto, actor }),
+    submitCounts: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_SUBMIT_COUNTS, { id, actor }),
+    review: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_REVIEW, { id, actor }),
+    approve: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_APPROVE, { id, actor }),
+    post: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_POST, { id, actor }),
+    cancel: (id: string, reason: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_CANCEL, { id, reason, actor }),
+    getReport: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_GET_REPORT, { id, actor }),
+    getPolicy: (businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_GET_POLICY, { businessId }),
+    updatePolicy: (policy: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_UPDATE_POLICY, { policy, actor }),
+    checkFreeze: (stockLocationId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCKTAKES_CHECK_FREEZE, { stockLocationId })
+  },
+
+  // Stock Transfers & In-Transit Workflow (Prompt 15)
+  stockTransfers: {
+    list: (filter?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_LIST, { filter }),
+    getById: (id: string): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_GET_BY_ID, { id }),
+    create: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_CREATE, { input, actor }),
+    approve: (id: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_APPROVE, { id, actor }),
+    dispatch: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_DISPATCH, { input, actor }),
+    receive: (input: any, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_RECEIVE, { input, actor }),
+    cancel: (id: string, reason: string, actor?: any): Promise<any> =>
+      invoke(IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, { id, reason, actor })
   }
 };
 

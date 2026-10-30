@@ -74,7 +74,7 @@ export class ProductCatalogService {
     const trackStock = dto.trackStock !== false ? 1 : 0;
     const allowNegativeStock = dto.allowNegativeStock ? 1 : 0;
     const isActive = dto.isActive !== false ? 1 : 0;
-    const purchaseCost = dto.purchaseCostMinor || 0;
+    const purchaseCost = dto.purchaseCostMinor ?? (dto as any).costPrice ?? 0;
     const retailPrice = dto.retailPriceMinor || 0;
     const openingStock = dto.openingStockScaled || 0;
     const lowStock = dto.lowStockThreshold || 5;
@@ -161,20 +161,46 @@ export class ProductCatalogService {
         });
       }
 
-      // If opening stock is specified, record stock projection in location 1
+      // If opening stock is specified, record stock projection
       if (openingStock > 0) {
-        this.db.prepare(`
-          INSERT OR REPLACE INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
-          VALUES (?, 0, 1, 0, ?)
-        `).run(productId, openingStock);
+        try {
+          const cols = this.db.prepare("PRAGMA table_info(stock_balances)").all() as Array<{ name: string }>;
+          if (cols.some((c) => c.name === 'stock_location_id')) {
+            const defaultLoc = this.db.prepare(
+              "SELECT id, business_id FROM stock_locations WHERE (business_id = ? OR business_id IS NULL) AND is_sellable = 1 AND is_active = 1 LIMIT 1"
+            ).get(dto.businessId) as { id: string; business_id: string } | undefined;
+            if (defaultLoc) {
+              const scaled = openingStock * 1000;
+              this.db.prepare(`
+                INSERT OR REPLACE INTO stock_balances (
+                  id, business_id, product_id, stock_location_id, on_hand_scaled, available_scaled
+                ) VALUES (?, ?, ?, ?, ?, ?)
+              `).run(`bal-${productId}-${defaultLoc.id}`, defaultLoc.business_id, String(productId), defaultLoc.id, scaled, scaled);
+            }
+          } else if (cols.some((c) => c.name === 'location_id')) {
+            this.db.prepare(`
+              INSERT OR REPLACE INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
+              VALUES (?, 0, 1, 0, ?)
+            `).run(productId, openingStock);
+          }
+        } catch {
+          // ignore
+        }
 
-        this.db.prepare(`
-          INSERT INTO stock_movements (
-            product_id, location_id, movement_type, quantity, quantity_base_scaled,
-            previous_stock, new_stock, reason, user_id
-          )
-          VALUES (?, 1, 'OPENING_BALANCE', ?, ?, 0, ?, 'Initial opening stock', ?)
-        `).run(productId, openingStock, openingStock, openingStock, userId || null);
+        try {
+          const moveCols = this.db.prepare("PRAGMA table_info(stock_movements)").all() as Array<{ name: string }>;
+          if (moveCols.some((c) => c.name === 'quantity_base_scaled')) {
+            this.db.prepare(`
+              INSERT INTO stock_movements (
+                product_id, location_id, movement_type, quantity, quantity_base_scaled,
+                previous_stock, new_stock, reason, user_id
+              )
+              VALUES (?, 1, 'OPENING_BALANCE', ?, ?, 0, ?, 'Initial opening stock', ?)
+            `).run(productId, openingStock, openingStock, openingStock, userId || null);
+          }
+        } catch {
+          // ignore
+        }
       }
     });
 

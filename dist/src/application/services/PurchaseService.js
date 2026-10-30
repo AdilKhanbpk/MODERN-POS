@@ -8,6 +8,7 @@ const AccountRepository_1 = require("../../infrastructure/sqlite/repositories/Ac
 const transaction_runner_1 = require("../../infrastructure/sqlite/transactions/transaction-runner");
 const landed_cost_1 = require("../../domain/purchases/landed-cost");
 const stock_location_rules_1 = require("../../domain/inventory/stock-location-rules");
+const stocktake_rules_1 = require("../../domain/inventory/stocktake-rules");
 const StockBalanceRepository_1 = require("../../infrastructure/sqlite/repositories/StockBalanceRepository");
 const double_entry_1 = require("../../domain/accounting/double-entry");
 const accounts_1 = require("../../shared/constants/accounts");
@@ -36,6 +37,7 @@ class PurchaseService {
         const grandTotal = subtotal + request.additionalCost;
         // Landed cost calculations
         const landedResults = landed_cost_1.LandedCostCalculator.calculateLandedCosts(request.items, request.additionalCost);
+        const targetDb = this.purchaseRepo?.db || this.productRepo?.db;
         return transaction_runner_1.TransactionRunner.run((db) => {
             // Step A0: Resolve and validate Stock Location (Prompt 11)
             let stockLoc = null;
@@ -54,6 +56,27 @@ class PurchaseService {
                     isActive: Boolean(stockLoc.is_active),
                     isReceivable: Boolean(stockLoc.is_receivable)
                 });
+                // Prompt 14 Policy A: Check Location Freeze
+                try {
+                    const frozenRow = db.prepare(`
+            SELECT id, stocktake_number FROM stocktakes
+            WHERE stock_location_id = ?
+              AND freeze_stock = 1
+              AND status IN ('in_progress', 'count_submitted', 'review', 'approved')
+            LIMIT 1
+          `).get(stockLoc.id);
+                    if (frozenRow) {
+                        stocktake_rules_1.StocktakeRules.validateLocationFreeze(true, stockLoc.name, frozenRow.stocktake_number, Boolean(request.overrideFreeze || request.overrideLocationFreeze), request.userRole || request.role);
+                    }
+                }
+                catch (err) {
+                    if (err instanceof stocktake_rules_1.StockLocationFrozenError ||
+                        err?.name === 'StockLocationFrozenError' ||
+                        err instanceof stocktake_rules_1.StocktakeSecurityError ||
+                        err?.name === 'StocktakeSecurityError') {
+                        throw err;
+                    }
+                }
             }
             // 1. Create Purchase Order
             const poId = this.purchaseRepo.create({
@@ -182,7 +205,7 @@ class PurchaseService {
                 }
             }
             return poId;
-        });
+        }, targetDb);
     }
     listPurchaseOrders() {
         return this.purchaseRepo.list();

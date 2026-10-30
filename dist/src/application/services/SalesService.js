@@ -9,6 +9,7 @@ const transaction_runner_1 = require("../../infrastructure/sqlite/transactions/t
 const pricing_calculator_1 = require("../../domain/sales/pricing-calculator");
 const stock_rules_1 = require("../../domain/inventory/stock-rules");
 const stock_location_rules_1 = require("../../domain/inventory/stock-location-rules");
+const stocktake_rules_1 = require("../../domain/inventory/stocktake-rules");
 const StockBalanceRepository_1 = require("../../infrastructure/sqlite/repositories/StockBalanceRepository");
 const double_entry_1 = require("../../domain/accounting/double-entry");
 const accounts_1 = require("../../shared/constants/accounts");
@@ -69,6 +70,7 @@ class SalesService {
             }
         }
         // 3. Perform atomic database transaction
+        const targetDb = this.saleRepo?.db || this.productRepo?.db;
         return transaction_runner_1.TransactionRunner.run((db) => {
             // Step A0: Resolve and validate Stock Location (Prompt 11)
             let stockLoc = null;
@@ -109,6 +111,27 @@ class SalesService {
                     isSellable: Boolean(stockLoc.is_sellable),
                     locationType: stockLoc.location_type
                 });
+                // Prompt 14 Policy A: Check Location Freeze
+                try {
+                    const frozenRow = db.prepare(`
+            SELECT id, stocktake_number FROM stocktakes
+            WHERE stock_location_id = ?
+              AND freeze_stock = 1
+              AND status IN ('in_progress', 'count_submitted', 'review', 'approved')
+            LIMIT 1
+          `).get(stockLoc.id);
+                    if (frozenRow) {
+                        stocktake_rules_1.StocktakeRules.validateLocationFreeze(true, stockLoc.name, frozenRow.stocktake_number, Boolean(request.overrideFreeze || request.overrideLocationFreeze), request.userRole || request.role);
+                    }
+                }
+                catch (err) {
+                    if (err instanceof stocktake_rules_1.StockLocationFrozenError ||
+                        err?.name === 'StockLocationFrozenError' ||
+                        err instanceof stocktake_rules_1.StocktakeSecurityError ||
+                        err?.name === 'StocktakeSecurityError') {
+                        throw err;
+                    }
+                }
             }
             // Step A: Validate stock and deduct inventory
             for (const item of request.items) {
@@ -245,7 +268,7 @@ class SalesService {
                 throw new Error('Failed to retrieve newly created sale');
             }
             return createdSale;
-        });
+        }, targetDb);
     }
     getSaleById(id) {
         return this.saleRepo.findById(id);
@@ -254,6 +277,7 @@ class SalesService {
         return this.saleRepo.list(limit);
     }
     voidSale(id, cashierId) {
+        const targetDb = this.saleRepo?.db || this.productRepo?.db;
         transaction_runner_1.TransactionRunner.run((db) => {
             const sale = this.saleRepo.findById(id);
             if (!sale)
@@ -300,7 +324,7 @@ class SalesService {
                 }
             }
             this.saleRepo.voidSale(id);
-        });
+        }, targetDb);
     }
 }
 exports.SalesService = SalesService;

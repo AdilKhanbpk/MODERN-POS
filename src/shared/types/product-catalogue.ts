@@ -108,6 +108,7 @@ export interface CreateProductDto {
   // Pricing & Stock
   barcode?: string;
   purchaseCostMinor?: number;
+  costPrice?: number;
   retailPriceMinor?: number;
   wholesalePriceMinor?: number;
   openingStockScaled?: number;

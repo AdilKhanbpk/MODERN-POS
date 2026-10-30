@@ -3,6 +3,7 @@ import { getDatabase } from '../connection';
 import { StockBalance, StockMovement, StockAdjustment, StockAdjustmentLine } from '../../../shared/types';
 import { StockMovementType } from '../../../shared/constants/accounts';
 import { IStockRepository } from '../../../shared/interfaces/repositories/IStockRepository';
+import { StockBalanceRepository } from './StockBalanceRepository';
 
 export class StockRepository implements IStockRepository {
   constructor(private db: Database.Database = getDatabase()) {}
@@ -28,14 +29,27 @@ export class StockRepository implements IStockRepository {
     const batchId = movement.batchId || 0;
     const locId = movement.locationId || 1;
 
-    // 1. Fetch current stock balance projection
-    const balanceRow = this.db.prepare(`
-      SELECT quantity_base_scaled as qty
-      FROM stock_balances
-      WHERE product_id = ? AND variant_id = ? AND location_id = ? AND batch_id = ?
-    `).get(movement.productId, variantId, locId, batchId) as { qty: number } | undefined;
+    const cols = (this.db.prepare("PRAGMA table_info('stock_balances')").all() as Array<{ name: string }>).map(c => c.name);
+    const hasOnHand = cols.includes('on_hand_scaled');
 
-    const previousStock = balanceRow ? balanceRow.qty : 0;
+    // 1. Fetch current stock balance projection
+    let previousStock = 0;
+    if (hasOnHand) {
+      const balanceRow = this.db.prepare(`
+        SELECT on_hand_scaled as qty
+        FROM stock_balances
+        WHERE product_id = ?
+      `).get(String(movement.productId)) as { qty: number } | undefined;
+      previousStock = balanceRow ? (balanceRow.qty / 1000) : 0;
+    } else {
+      const balanceRow = this.db.prepare(`
+        SELECT quantity_base_scaled as qty
+        FROM stock_balances
+        WHERE product_id = ? AND variant_id = ? AND location_id = ? AND batch_id = ?
+      `).get(movement.productId, variantId, locId, batchId) as { qty: number } | undefined;
+      previousStock = balanceRow ? balanceRow.qty : 0;
+    }
+
     const newStock = Math.round((previousStock + movement.quantityBaseScaled) * 10000) / 10000;
 
     // 2. Insert immutable stock_movements entry
@@ -67,28 +81,51 @@ export class StockRepository implements IStockRepository {
     );
 
     // 3. Atomically update stock_balances projection
-    this.db.prepare(`
-      INSERT INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(product_id, variant_id, location_id, batch_id) DO UPDATE SET
-        quantity_base_scaled = excluded.quantity_base_scaled
-    `).run(movement.productId, variantId, locId, batchId, newStock);
+    if (hasOnHand) {
+      const loc = this.db.prepare("SELECT id, business_id FROM stock_locations WHERE is_default = 1 LIMIT 1").get() as any;
+      if (loc) {
+        const balanceRepo = new StockBalanceRepository(this.db);
+        const currentBal = balanceRepo.getBalance(movement.productId, loc.id, loc.business_id, null);
+        const currentOnHand = currentBal ? currentBal.onHandScaled : 0;
+        const targetOnHand = Math.round(newStock * 1000);
+        const delta = targetOnHand - currentOnHand;
+        balanceRepo.upsertDelta({
+          businessId: loc.business_id,
+          productId: movement.productId,
+          stockLocationId: loc.id,
+          onHandDeltaScaled: delta
+        });
+      }
+    } else {
+      this.db.prepare(`
+        INSERT INTO stock_balances (product_id, variant_id, location_id, batch_id, quantity_base_scaled)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(product_id, variant_id, location_id, batch_id) DO UPDATE SET
+          quantity_base_scaled = excluded.quantity_base_scaled
+      `).run(movement.productId, variantId, locId, batchId, newStock);
+    }
 
     // 4. Update products.current_stock cached field
     this.db.prepare(`
       UPDATE products
-      SET current_stock = (
-        SELECT COALESCE(SUM(quantity_base_scaled), 0)
-        FROM stock_balances
-        WHERE product_id = ?
-      )
+      SET current_stock = ?
       WHERE id = ?
-    `).run(movement.productId, movement.productId);
+    `).run(newStock, movement.productId);
 
     return Number(info.lastInsertRowid);
   }
 
   public getStockBalance(productId: number, locationId = 1, variantId = 0, batchId = 0): number {
+    const cols = (this.db.prepare("PRAGMA table_info('stock_balances')").all() as Array<{ name: string }>).map(c => c.name);
+    if (cols.includes('on_hand_scaled')) {
+      const row = this.db.prepare(`
+        SELECT on_hand_scaled as qty
+        FROM stock_balances
+        WHERE product_id = ?
+      `).get(String(productId)) as { qty: number } | undefined;
+      return row ? (row.qty / 1000) : 0;
+    }
+
     const row = this.db.prepare(`
       SELECT quantity_base_scaled as qty
       FROM stock_balances
@@ -108,23 +145,37 @@ export class StockRepository implements IStockRepository {
     isReconciled: boolean;
     difference: number;
   } {
+    const cols = (this.db.prepare("PRAGMA table_info('stock_balances')").all() as Array<{ name: string }>).map(c => c.name);
+    const hasOnHand = cols.includes('on_hand_scaled');
+
     const movementSumRow = this.db.prepare(`
       SELECT COALESCE(SUM(quantity_base_scaled), 0) as total
       FROM stock_movements
-      WHERE product_id = ? AND location_id = ?
-    `).get(productId, locationId) as { total: number };
+      WHERE product_id = ?
+    `).get(productId) as { total: number };
 
-    const balanceRow = this.db.prepare(`
-      SELECT COALESCE(SUM(quantity_base_scaled), 0) as total
-      FROM stock_balances
-      WHERE product_id = ? AND location_id = ?
-    `).get(productId, locationId) as { total: number };
+    let projected = 0;
+    if (hasOnHand) {
+      const balanceRow = this.db.prepare(`
+        SELECT COALESCE(SUM(on_hand_scaled), 0) as total
+        FROM stock_balances
+        WHERE product_id = ?
+      `).get(String(productId)) as { total: number };
+      projected = balanceRow.total / 1000;
+    } else {
+      const balanceRow = this.db.prepare(`
+        SELECT COALESCE(SUM(quantity_base_scaled), 0) as total
+        FROM stock_balances
+        WHERE product_id = ? AND location_id = ?
+      `).get(productId, locationId) as { total: number };
+      projected = balanceRow.total;
+    }
 
-    const diff = Math.round((movementSumRow.total - balanceRow.total) * 1000) / 1000;
+    const diff = Math.round((movementSumRow.total - projected) * 1000) / 1000;
 
     return {
       calculatedFromMovements: movementSumRow.total,
-      projectedInBalance: balanceRow.total,
+      projectedInBalance: projected,
       isReconciled: diff === 0,
       difference: diff
     };

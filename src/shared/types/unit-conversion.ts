@@ -21,6 +21,9 @@ export interface ProductUnitConversion {
   fromUnitAbbreviation?: string;
   toBaseFactorNumerator: number;
   toBaseFactorDenominator: number;
+  unitId?: string | number;
+  baseUnitsNumerator?: number;
+  baseUnitsDenominator?: number;
   isPurchaseUnit: boolean;
   isSaleUnit: boolean;
   isDefaultPurchaseUnit: boolean;
