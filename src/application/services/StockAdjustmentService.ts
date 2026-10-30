@@ -12,6 +12,7 @@ import {
 } from '../../domain/inventory/stock-adjustment-rules';
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
 import { StocktakeRules, StockLocationFrozenError, StocktakeSecurityError } from '../../domain/inventory/stocktake-rules';
+import { StockReservationRules, ReservationStockConflictError } from '../../domain/inventory/stock-reservation-rules';
 import {
   EnterpriseStockAdjustment,
   EnterpriseStockAdjustmentDetail,
@@ -294,7 +295,7 @@ export class StockAdjustmentService {
   public postAdjustment(
     adjustmentId: string,
     actor: ActorContext,
-    options: { forceRefreshSnapshot?: boolean } = {}
+    options: { forceRefreshSnapshot?: boolean; allowReservationConflict?: boolean } = {}
   ): EnterpriseStockAdjustmentDetail {
     const adj = this.adjRepo.findById(adjustmentId);
     if (!adj) throw new Error(`Stock adjustment '${adjustmentId}' not found`);
@@ -371,6 +372,17 @@ export class StockAdjustmentService {
           currentOnHandScaled,
           line.differenceQuantityScaled,
           allowNeg
+        );
+
+        // Prompt 17 Reservation Conflict Guard:
+        // If an adjustment causes on-hand quantity to drop below active reservations, require authorized override.
+        const newOnHandScaled = currentOnHandScaled + line.differenceQuantityScaled;
+        const activeReservedScaled = bal ? bal.reservedScaled : 0;
+        StockReservationRules.validateAdjustmentReservationConflict(
+          product.name,
+          newOnHandScaled,
+          activeReservedScaled,
+          Boolean(options.allowReservationConflict)
         );
 
         // 2. Post Movement if difference != 0

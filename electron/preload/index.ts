@@ -436,6 +436,22 @@ export const posApi = {
       invoke(IPC_CHANNELS.STOCK_TRANSFERS_RECEIVE, { input, actor }),
     cancel: (id: string, reason: string, actor?: any): Promise<any> =>
       invoke(IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, { id, reason, actor })
+  },
+
+  // Inventory Valuation & Costing (Prompt 16)
+  valuation: {
+    getReport: (businessId?: string, locationId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_GET_REPORT, { businessId, locationId }),
+    processInbound: (input: any): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_PROCESS_INBOUND, { input }),
+    processOutbound: (input: any): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_PROCESS_OUTBOUND, { input }),
+    revalue: (params: any): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_REVALUE, { params }),
+    allocateLandedCosts: (input: any): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, { input }),
+    customerReturn: (input: any): Promise<any> =>
+      invoke(IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, { input })
   }
 };
 

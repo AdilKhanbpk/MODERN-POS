@@ -26,6 +26,7 @@ const StockLocationService_1 = require("../../../src/application/services/StockL
 const StockAdjustmentService_1 = require("../../../src/application/services/StockAdjustmentService");
 const StocktakeService_1 = require("../../../src/application/services/StocktakeService");
 const StockTransferService_1 = require("../../../src/application/services/StockTransferService");
+const InventoryValuationService_1 = require("../../../src/application/services/InventoryValuationService");
 const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
@@ -57,6 +58,7 @@ function registerIpcHandlers() {
     const stockAdjustmentService = new StockAdjustmentService_1.StockAdjustmentService();
     const stocktakeService = new StocktakeService_1.StocktakeService((0, connection_1.getDatabase)());
     const stockTransferService = new StockTransferService_1.StockTransferService((0, connection_1.getDatabase)(), moduleManager);
+    const valuationService = new InventoryValuationService_1.InventoryValuationService((0, connection_1.getDatabase)());
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -679,5 +681,25 @@ function registerIpcHandlers() {
     handle(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, (payload) => {
         const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
         return stockTransferService.cancelTransfer(payload.id, payload.reason, actor);
+    });
+    // Inventory Valuation & Costing (Prompt 16)
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_GET_REPORT, (payload) => {
+        const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+        return valuationService.getValuationReport(bizId, payload?.locationId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_PROCESS_INBOUND, (payload) => {
+        return valuationService.processInboundReceipt(payload.input);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_PROCESS_OUTBOUND, (payload) => {
+        return valuationService.processOutboundIssue(payload.input);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_REVALUE, (payload) => {
+        return valuationService.revalueInventory(payload.params);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, (payload) => {
+        return valuationService.allocateLandedCosts(payload.input);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, (payload) => {
+        return valuationService.processCustomerReturn(payload.input);
     });
 }

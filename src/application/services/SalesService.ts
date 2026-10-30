@@ -7,6 +7,9 @@ import { PricingCalculator } from '../../domain/sales/pricing-calculator';
 import { StockRules } from '../../domain/inventory/stock-rules';
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
 import { StocktakeRules, StockLocationFrozenError, StocktakeSecurityError } from '../../domain/inventory/stocktake-rules';
+import { StockReservationRules, InsufficientAvailableStockError } from '../../domain/inventory/stock-reservation-rules';
+import { StockReservationRepository } from '../../infrastructure/sqlite/repositories/StockReservationRepository';
+import { StockReservationService } from './StockReservationService';
 import { StockBalanceRepository } from '../../infrastructure/sqlite/repositories/StockBalanceRepository';
 import { DoubleEntryLedger } from '../../domain/accounting/double-entry';
 import { CreateSaleRequest, Sale, SaleCalculationResult, CartItemInput } from '../../shared/types';
@@ -155,6 +158,32 @@ export class SalesService {
         }
       }
 
+      // Sweep expired reservations before evaluating stock availability
+      try {
+        const resService = new StockReservationService(db);
+        resService.checkAndExpireReservations(stockLoc?.business_id);
+      } catch {
+        // Table or service may not be available in early isolated tests
+      }
+
+      let activeReservation: any = null;
+      if (request.reservationId) {
+        const resRepo = new StockReservationRepository(db);
+        activeReservation = resRepo.findById(request.reservationId);
+        if (!activeReservation) {
+          throw new Error(`Reservation '${request.reservationId}' not found.`);
+        }
+        if (activeReservation.status === 'cancelled') {
+          throw new Error(`Reservation '${activeReservation.reservationNumber}' is cancelled and cannot be fulfilled.`);
+        }
+        if (activeReservation.status === 'fulfilled') {
+          throw new Error(`Reservation '${activeReservation.reservationNumber}' is already completely fulfilled.`);
+        }
+        if (activeReservation.status === 'expired' || StockReservationRules.isExpired(activeReservation.expiresAt)) {
+          throw new Error(`Reservation '${activeReservation.reservationNumber}' is expired.`);
+        }
+      }
+
       // Step A: Validate stock and deduct inventory
       for (const item of request.items) {
         const product = this.productRepo.findById(item.productId);
@@ -163,6 +192,53 @@ export class SalesService {
         }
 
         const baseQtyNeeded = item.quantity * item.conversionFactor;
+        const baseQtyNeededScaled = Math.round(baseQtyNeeded * 1000);
+
+        if (stockLoc) {
+          const balanceRepo = new StockBalanceRepository(db);
+          const balance = balanceRepo.getBalance(product.id, stockLoc.id, stockLoc.business_id);
+
+          if (balance) {
+            if (activeReservation) {
+              const resLine = (activeReservation.lines || []).find(
+                (l: any) => String(l.productId) === String(product.id) && l.stockLocationId === stockLoc.id
+              );
+              if (resLine) {
+                StockReservationRules.validateFulfillment(activeReservation, resLine, baseQtyNeededScaled);
+                const resRepo = new StockReservationRepository(db);
+                resRepo.updateLineQuantities(resLine.id, baseQtyNeededScaled, 0);
+
+                // Relieve reserved commitment
+                balanceRepo.upsertDelta({
+                  businessId: stockLoc.business_id,
+                  productId: product.id,
+                  stockLocationId: stockLoc.id,
+                  onHandDeltaScaled: 0,
+                  reservedDeltaScaled: -baseQtyNeededScaled
+                });
+
+                resLine.fulfilledQuantityScaled += baseQtyNeededScaled;
+              } else {
+                // Item is not on the reservation; evaluate against remaining available stock
+                StockReservationRules.validateSaleAvailability(
+                  product.name,
+                  balance.onHandScaled,
+                  balance.reservedScaled,
+                  baseQtyNeededScaled
+                );
+              }
+            } else {
+              // Ordinary sale without reservation: strictly forbidden from consuming reserved stock
+              StockReservationRules.validateSaleAvailability(
+                product.name,
+                balance.onHandScaled,
+                balance.reservedScaled,
+                baseQtyNeededScaled
+              );
+            }
+          }
+        }
+
         const validation = StockRules.validateAvailability(product.currentStock, baseQtyNeeded, false);
         if (!validation.isValid) {
           throw new Error(`Product '${product.name}' stock shortage: ${validation.message}`);
@@ -182,7 +258,7 @@ export class SalesService {
             businessId: stockLoc.business_id,
             productId: product.id,
             stockLocationId: stockLoc.id,
-            onHandDeltaScaled: -Math.round(baseQtyNeeded * 1000)
+            onHandDeltaScaled: -baseQtyNeededScaled
           });
         }
 
@@ -194,9 +270,22 @@ export class SalesService {
           newStock,
           stockLocationId: stockLoc?.id,
           referenceType: 'SALE',
-          reason: 'Retail sale deduction',
+          reason: activeReservation ? `Reservation ${activeReservation.reservationNumber} fulfillment` : 'Retail sale deduction',
           userId: request.cashierId
         });
+      }
+
+      // If fulfilling a reservation, evaluate whether it is now completely fulfilled
+      if (activeReservation) {
+        const resRepo = new StockReservationRepository(db);
+        const refreshedRes = resRepo.findById(activeReservation.id);
+        if (refreshedRes) {
+          const allFulfilled = (refreshedRes.lines || []).every(
+            (l) => (l.fulfilledQuantityScaled + l.releasedQuantityScaled) >= l.reservedQuantityScaled
+          );
+          const newStatus = allFulfilled ? 'fulfilled' : 'partially_fulfilled';
+          resRepo.updateStatus(activeReservation.id, newStatus);
+        }
       }
 
       // Step B: Generate Invoice Number and save Sale

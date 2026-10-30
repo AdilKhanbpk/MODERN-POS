@@ -23,6 +23,8 @@ import { StockLocationService } from '../../../src/application/services/StockLoc
 import { StockAdjustmentService } from '../../../src/application/services/StockAdjustmentService';
 import { StocktakeService } from '../../../src/application/services/StocktakeService';
 import { StockTransferService } from '../../../src/application/services/StockTransferService';
+import { InventoryValuationService } from '../../../src/application/services/InventoryValuationService';
+import { StockReservationService } from '../../../src/application/services/StockReservationService';
 import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
@@ -63,6 +65,7 @@ export function registerIpcHandlers(): void {
   const stockAdjustmentService = new StockAdjustmentService();
   const stocktakeService = new StocktakeService(getDatabase());
   const stockTransferService = new StockTransferService(getDatabase(), moduleManager);
+  const valuationService = new InventoryValuationService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -887,6 +890,32 @@ export function registerIpcHandlers(): void {
   handle(IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, (payload: { id: string; reason: string; actor?: any }) => {
     const actor = payload.actor || { userId: 1, role: 'manager', businessId: '00000000-0000-0000-0000-000000000001' };
     return stockTransferService.cancelTransfer(payload.id, payload.reason, actor);
+  });
+
+  // Inventory Valuation & Costing (Prompt 16)
+  handle(IPC_CHANNELS.VALUATION_GET_REPORT, (payload: { businessId?: string; locationId?: string }) => {
+    const bizId = payload?.businessId || '00000000-0000-0000-0000-000000000001';
+    return valuationService.getValuationReport(bizId, payload?.locationId);
+  });
+
+  handle(IPC_CHANNELS.VALUATION_PROCESS_INBOUND, (payload: { input: any }) => {
+    return valuationService.processInboundReceipt(payload.input);
+  });
+
+  handle(IPC_CHANNELS.VALUATION_PROCESS_OUTBOUND, (payload: { input: any }) => {
+    return valuationService.processOutboundIssue(payload.input);
+  });
+
+  handle(IPC_CHANNELS.VALUATION_REVALUE, (payload: { params: any }) => {
+    return valuationService.revalueInventory(payload.params);
+  });
+
+  handle(IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, (payload: { input: any }) => {
+    return valuationService.allocateLandedCosts(payload.input);
+  });
+
+  handle(IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, (payload: { input: any }) => {
+    return valuationService.processCustomerReturn(payload.input);
   });
 }
 

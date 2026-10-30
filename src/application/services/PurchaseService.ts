@@ -7,6 +7,7 @@ import { LandedCostCalculator } from '../../domain/purchases/landed-cost';
 import { StockLocationRules } from '../../domain/inventory/stock-location-rules';
 import { StocktakeRules, StockLocationFrozenError, StocktakeSecurityError } from '../../domain/inventory/stocktake-rules';
 import { StockBalanceRepository } from '../../infrastructure/sqlite/repositories/StockBalanceRepository';
+import { InventoryValuationService } from './InventoryValuationService';
 import { DoubleEntryLedger } from '../../domain/accounting/double-entry';
 import { CreatePurchaseOrderRequest, PurchaseOrder } from '../../shared/types';
 import { StockMovementType, StandardAccountCode } from '../../shared/constants/accounts';
@@ -131,12 +132,28 @@ export class PurchaseService {
 
           if (stockLoc) {
             const balanceRepo = new StockBalanceRepository(db);
+            const scaledQty = Math.round(addedBaseQty * 1000);
             balanceRepo.upsertDelta({
               businessId: stockLoc.business_id,
               productId: product.id,
               stockLocationId: stockLoc.id,
-              onHandDeltaScaled: Math.round(addedBaseQty * 1000)
+              onHandDeltaScaled: scaledQty
             });
+
+            try {
+              const valuationService = new InventoryValuationService(db);
+              valuationService.processInboundReceipt({
+                businessId: stockLoc.business_id,
+                productId: product.id,
+                stockLocationId: stockLoc.id,
+                quantityScaled: scaledQty,
+                unitCostMinor: effectiveUnitCost,
+                currencyCode: 'PKR',
+                sourceMovementId: String(poId)
+              });
+            } catch (vErr) {
+              console.warn('[Valuation Inbound Warning]:', vErr);
+            }
           }
 
           this.productRepo.logStockMovement({

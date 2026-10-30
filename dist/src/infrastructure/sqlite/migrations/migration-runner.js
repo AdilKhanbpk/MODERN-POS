@@ -24,6 +24,7 @@ const _014_stock_movement_ledger_1 = require("./014_stock_movement_ledger");
 const _015_stock_adjustments_1 = require("./015_stock_adjustments");
 const _016_stocktakes_and_physical_counting_1 = require("./016_stocktakes_and_physical_counting");
 const _017_stock_transfers_and_in_transit_1 = require("./017_stock_transfers_and_in_transit");
+const _018_inventory_valuation_and_costing_1 = require("./018_inventory_valuation_and_costing");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -86,6 +87,9 @@ function runMigrations(db) {
     }
     if (currentVersion < 17) {
         (0, _017_stock_transfers_and_in_transit_1.applyMigrationV17)(db);
+    }
+    if (currentVersion < 18) {
+        (0, _018_inventory_valuation_and_costing_1.applyMigrationV18)(db);
     }
 }
 function applyMigrationV1(db) {

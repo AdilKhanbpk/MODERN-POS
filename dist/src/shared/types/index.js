@@ -36,3 +36,4 @@ __exportStar(require("./stock-movement"), exports);
 __exportStar(require("./stock-adjustment"), exports);
 __exportStar(require("./stocktake"), exports);
 __exportStar(require("./stock-transfer"), exports);
+__exportStar(require("./inventory-valuation"), exports);

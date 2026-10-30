@@ -19,6 +19,8 @@ import { applyMigrationV14 } from './014_stock_movement_ledger';
 import { applyMigrationV15 } from './015_stock_adjustments';
 import { applyMigrationV16 } from './016_stocktakes_and_physical_counting';
 import { applyMigrationV17 } from './017_stock_transfers_and_in_transit';
+import { applyMigrationV18 } from './018_inventory_valuation_and_costing';
+import { applyMigrationV19 } from './019_stock_reservations';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -100,6 +102,14 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 17) {
     applyMigrationV17(db);
+  }
+
+  if (currentVersion < 18) {
+    applyMigrationV18(db);
+  }
+
+  if (currentVersion < 19) {
+    applyMigrationV19(db);
   }
 }
 

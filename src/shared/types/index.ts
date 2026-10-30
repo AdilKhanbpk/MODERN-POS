@@ -755,6 +755,7 @@ export interface CreateSaleRequest {
   amountPaid: number;
   isCredit?: boolean;
   splitPayments?: Array<{ method: PaymentMethod; amount: number }>;
+  reservationId?: string;
   notes?: string;
 }
 
@@ -849,5 +850,7 @@ export * from './stock-movement';
 export * from './stock-adjustment';
 export * from './stocktake';
 export * from './stock-transfer';
+export * from './inventory-valuation';
+export * from './stock-reservation';
 
 

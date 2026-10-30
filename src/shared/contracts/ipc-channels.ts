@@ -209,7 +209,25 @@ export const IPC_CHANNELS = {
   STOCK_TRANSFERS_APPROVE: 'stock-transfers:approve',
   STOCK_TRANSFERS_DISPATCH: 'stock-transfers:dispatch',
   STOCK_TRANSFERS_RECEIVE: 'stock-transfers:receive',
-  STOCK_TRANSFERS_CANCEL: 'stock-transfers:cancel'
+  STOCK_TRANSFERS_CANCEL: 'stock-transfers:cancel',
+
+  // Inventory Valuation & Costing (Prompt 16)
+  VALUATION_GET_REPORT: 'valuation:get-report',
+  VALUATION_PROCESS_INBOUND: 'valuation:process-inbound',
+  VALUATION_PROCESS_OUTBOUND: 'valuation:process-outbound',
+  VALUATION_REVALUE: 'valuation:revalue',
+  VALUATION_ALLOCATE_LANDED_COSTS: 'valuation:allocate-landed-costs',
+  VALUATION_CUSTOMER_RETURN: 'valuation:customer-return',
+
+  // Stock Reservations (Prompt 17)
+  RESERVATIONS_LIST: 'reservations:list',
+  RESERVATIONS_GET_BY_ID: 'reservations:get-by-id',
+  RESERVATIONS_CREATE: 'reservations:create',
+  RESERVATIONS_FULFILL: 'reservations:fulfill',
+  RESERVATIONS_RELEASE: 'reservations:release',
+  RESERVATIONS_EXTEND: 'reservations:extend',
+  RESERVATIONS_CANCEL: 'reservations:cancel',
+  RESERVATIONS_CHECK_EXPIRED: 'reservations:check-expired'
 };
 
 export interface ApiResponse<T = any> {

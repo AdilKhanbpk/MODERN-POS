@@ -241,6 +241,15 @@ exports.posApi = {
         dispatch: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_DISPATCH, { input, actor }),
         receive: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_RECEIVE, { input, actor }),
         cancel: (id, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.STOCK_TRANSFERS_CANCEL, { id, reason, actor })
+    },
+    // Inventory Valuation & Costing (Prompt 16)
+    valuation: {
+        getReport: (businessId, locationId) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_GET_REPORT, { businessId, locationId }),
+        processInbound: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_PROCESS_INBOUND, { input }),
+        processOutbound: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_PROCESS_OUTBOUND, { input }),
+        revalue: (params) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_REVALUE, { params }),
+        allocateLandedCosts: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_ALLOCATE_LANDED_COSTS, { input }),
+        customerReturn: (input) => invoke(ipc_channels_1.IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, { input })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);

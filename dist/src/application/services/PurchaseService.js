@@ -10,6 +10,7 @@ const landed_cost_1 = require("../../domain/purchases/landed-cost");
 const stock_location_rules_1 = require("../../domain/inventory/stock-location-rules");
 const stocktake_rules_1 = require("../../domain/inventory/stocktake-rules");
 const StockBalanceRepository_1 = require("../../infrastructure/sqlite/repositories/StockBalanceRepository");
+const InventoryValuationService_1 = require("./InventoryValuationService");
 const double_entry_1 = require("../../domain/accounting/double-entry");
 const accounts_1 = require("../../shared/constants/accounts");
 class PurchaseService {
@@ -114,12 +115,28 @@ class PurchaseService {
                     });
                     if (stockLoc) {
                         const balanceRepo = new StockBalanceRepository_1.StockBalanceRepository(db);
+                        const scaledQty = Math.round(addedBaseQty * 1000);
                         balanceRepo.upsertDelta({
                             businessId: stockLoc.business_id,
                             productId: product.id,
                             stockLocationId: stockLoc.id,
-                            onHandDeltaScaled: Math.round(addedBaseQty * 1000)
+                            onHandDeltaScaled: scaledQty
                         });
+                        try {
+                            const valuationService = new InventoryValuationService_1.InventoryValuationService(db);
+                            valuationService.processInboundReceipt({
+                                businessId: stockLoc.business_id,
+                                productId: product.id,
+                                stockLocationId: stockLoc.id,
+                                quantityScaled: scaledQty,
+                                unitCostMinor: effectiveUnitCost,
+                                currencyCode: 'PKR',
+                                sourceMovementId: String(poId)
+                            });
+                        }
+                        catch (vErr) {
+                            console.warn('[Valuation Inbound Warning]:', vErr);
+                        }
                     }
                     this.productRepo.logStockMovement({
                         productId: product.id,
