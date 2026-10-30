@@ -66,6 +66,7 @@ export function registerIpcHandlers(): void {
   const stocktakeService = new StocktakeService(getDatabase());
   const stockTransferService = new StockTransferService(getDatabase(), moduleManager);
   const valuationService = new InventoryValuationService(getDatabase());
+  const stockReservationService = new StockReservationService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -916,6 +917,44 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.VALUATION_CUSTOMER_RETURN, (payload: { input: any }) => {
     return valuationService.processCustomerReturn(payload.input);
+  });
+
+  // Stock Reservations (Prompt 17)
+  handle(IPC_CHANNELS.RESERVATIONS_LIST, (filter: any) => {
+    return stockReservationService.listReservations(filter);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_GET_BY_ID, (payload: { id: string }) => {
+    return stockReservationService.getReservation(payload.id);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_CREATE, (payload: { dto: any; actor?: any }) => {
+    const actor = payload.actor || { userId: 1, role: 'manager', businessId: payload.dto?.businessId };
+    return stockReservationService.createReservation(payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_FULFILL, (payload: { dto: any; actor?: any }) => {
+    const actor = payload.actor || { userId: 1, role: 'manager' };
+    return stockReservationService.fulfillReservation(payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_RELEASE, (payload: { dto: any; actor?: any }) => {
+    const actor = payload.actor || { userId: 1, role: 'manager' };
+    return stockReservationService.releaseReservation(payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_EXTEND, (payload: { dto: any; actor?: any }) => {
+    const actor = payload.actor || { userId: 1, role: 'manager' };
+    return stockReservationService.extendReservation(payload.dto, actor);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_CANCEL, (payload: { id: string; reason?: string; actor?: any }) => {
+    const actor = payload.actor || { userId: 1, role: 'manager' };
+    return stockReservationService.cancelReservation(payload.id, actor, payload.reason);
+  });
+
+  handle(IPC_CHANNELS.RESERVATIONS_CHECK_EXPIRED, (payload: { businessId?: string }) => {
+    return stockReservationService.checkAndExpireReservations(payload?.businessId);
   });
 }
 
