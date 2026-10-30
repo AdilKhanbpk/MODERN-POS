@@ -29,6 +29,7 @@ import { StockReplenishmentService } from '../../../src/application/services/Sto
 import { BatchExpiryService } from '../../../src/application/services/BatchExpiryService';
 import { SerialTrackingService } from '../../../src/application/services/SerialTrackingService';
 import { PurchaseOrderService } from '../../../src/application/services/PurchaseOrderService';
+import { GoodsReceiptService } from '../../../src/application/services/GoodsReceiptService';
 import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
@@ -75,6 +76,7 @@ export function registerIpcHandlers(): void {
   const batchExpiryService = new BatchExpiryService(getDatabase());
   const serialTrackingService = new SerialTrackingService(getDatabase());
   const purchaseOrderService = new PurchaseOrderService(getDatabase());
+  const goodsReceiptService = new GoodsReceiptService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -1171,6 +1173,47 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.PO_GET_LAST_PRICE, (payload: { businessId: string; supplierId: string | number; productId: string | number }) => {
     return purchaseOrderService.getLastPurchasePrice(payload.businessId, payload.supplierId, payload.productId);
+  });
+
+  // --- Goods Receiving Notes Handlers (Prompt 22) ---
+  handle(IPC_CHANNELS.GRN_GET_SETTINGS, (payload: { businessId: string }) => {
+    return goodsReceiptService.getSettings(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.GRN_CONFIGURE_SETTINGS, (payload: { businessId: string; settings: any }) => {
+    return goodsReceiptService.configureSettings(payload.businessId, payload.settings);
+  });
+
+  handle(IPC_CHANNELS.GRN_CREATE, (payload: { input: any; actor: any }) => {
+    return goodsReceiptService.createReceipt(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.GRN_GET_BY_ID, (payload: { id: string; businessId?: string }) => {
+    return goodsReceiptService.findById(payload.id, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.GRN_INSPECT, (payload: { input: any; actor: any }) => {
+    return goodsReceiptService.inspectReceipt(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.GRN_APPROVE, (payload: { receiptId: string; actor: any }) => {
+    return goodsReceiptService.approveReceipt(payload.receiptId, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.GRN_POST, (payload: { input: any; actor: any }) => {
+    return goodsReceiptService.postReceipt(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.GRN_CANCEL, (payload: { receiptId: string; reason: string; actor: any }) => {
+    return goodsReceiptService.cancelReceipt(payload.receiptId, payload.reason, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.GRN_SEARCH, (payload: { query: any }) => {
+    return goodsReceiptService.search(payload.query);
+  });
+
+  handle(IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, (payload: { businessId: string; purchaseOrderId?: string }) => {
+    return goodsReceiptService.getDiscrepancyReport(payload.businessId, payload.purchaseOrderId);
   });
 }
 

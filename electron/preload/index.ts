@@ -588,6 +588,30 @@ export const posApi = {
       invoke(IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, { businessId, supplierId }),
     getLastPurchasePrice: (businessId: string, supplierId: string | number, productId: string | number): Promise<any> =>
       invoke(IPC_CHANNELS.PO_GET_LAST_PRICE, { businessId, supplierId, productId })
+  },
+
+  // Goods Receiving Notes (Prompt 22)
+  goodsReceipts: {
+    getSettings: (businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_GET_SETTINGS, { businessId }),
+    configureSettings: (businessId: string, settings: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_CONFIGURE_SETTINGS, { businessId, settings }),
+    createReceipt: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_CREATE, { input, actor }),
+    getById: (id: string, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_GET_BY_ID, { id, businessId }),
+    inspectReceipt: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_INSPECT, { input, actor }),
+    approveReceipt: (receiptId: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_APPROVE, { receiptId, actor }),
+    postReceipt: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_POST, { input, actor }),
+    cancelReceipt: (receiptId: string, reason: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_CANCEL, { receiptId, reason, actor }),
+    search: (query: any): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_SEARCH, { query }),
+    getDiscrepancyReport: (businessId: string, purchaseOrderId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, { businessId, purchaseOrderId })
   }
 };
 

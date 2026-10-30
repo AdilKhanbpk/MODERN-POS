@@ -30,6 +30,7 @@ const _020_stock_replenishment_and_monitoring_1 = require("./020_stock_replenish
 const _021_batch_and_expiry_management_1 = require("./021_batch_and_expiry_management");
 const _022_serial_number_tracking_1 = require("./022_serial_number_tracking");
 const _023_purchase_orders_workflow_1 = require("./023_purchase_orders_workflow");
+const _024_goods_receiving_notes_1 = require("./024_goods_receiving_notes");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -110,6 +111,9 @@ function runMigrations(db) {
     }
     if (currentVersion < 23) {
         (0, _023_purchase_orders_workflow_1.applyMigrationV23)(db);
+    }
+    if (currentVersion < 24) {
+        (0, _024_goods_receiving_notes_1.applyMigrationV24)(db);
     }
 }
 function applyMigrationV1(db) {

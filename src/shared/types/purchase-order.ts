@@ -134,7 +134,7 @@ export interface UpdatePurchaseOrderInput {
   lines?: CreatePurchaseOrderLineInput[];
 }
 
-export interface GoodsReceiptLineInput {
+export interface POGoodsReceiptLineInput {
   purchaseOrderLineId: string;
   receivedQuantityScaled: number;
   stockLocationId?: string;
@@ -150,7 +150,7 @@ export interface ReceiveGoodsInput {
   receiptNumber?: string;
   stockLocationId: string;
   receiptDate?: string;
-  lines: GoodsReceiptLineInput[];
+  lines: POGoodsReceiptLineInput[];
   managerApproved?: boolean;
   managerOverrideReason?: string;
   notes?: string;

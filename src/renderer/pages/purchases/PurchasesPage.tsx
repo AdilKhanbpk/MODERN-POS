@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { PurchaseOrder as LegacyPurchaseOrder, Supplier, Product } from '../../../shared/types';
-import { Truck, Plus, RefreshCw, X, PackagePlus, FileText, ShoppingBag } from 'lucide-react';
+import { Truck, Plus, RefreshCw, X, PackagePlus, FileText, ShoppingBag, PackageCheck } from 'lucide-react';
 import { PurchaseOrdersView } from '../../components/purchase/PurchaseOrdersView';
+import { GoodsReceiptsView } from '../../components/receiving/GoodsReceiptsView';
 
 export const PurchasesPage: React.FC = () => {
-  const [tab, setTab] = useState<'orders' | 'direct'>('orders');
+  const [tab, setTab] = useState<'orders' | 'grn' | 'direct'>('orders');
   const [purchases, setPurchases] = useState<LegacyPurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -105,6 +106,17 @@ export const PurchasesPage: React.FC = () => {
               <span>Purchase Orders</span>
             </button>
             <button
+              onClick={() => setTab('grn')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                tab === 'grn'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PackageCheck className="w-3.5 h-3.5" />
+              <span>Goods Receipts (GRN)</span>
+            </button>
+            <button
               onClick={() => setTab('direct')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 tab === 'direct'
@@ -142,6 +154,10 @@ export const PurchasesPage: React.FC = () => {
       {tab === 'orders' ? (
         <div className="flex-1 overflow-hidden mt-2">
           <PurchaseOrdersView />
+        </div>
+      ) : tab === 'grn' ? (
+        <div className="flex-1 overflow-hidden mt-2">
+          <GoodsReceiptsView />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto mt-4 rounded-xl border border-slate-800 bg-slate-900/60">

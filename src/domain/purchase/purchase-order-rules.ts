@@ -4,7 +4,7 @@ import {
   PurchaseOrderLine,
   PurchaseOrderSettings,
   CreatePurchaseOrderInput,
-  GoodsReceiptLineInput
+  POGoodsReceiptLineInput
 } from '../../shared/types/purchase-order';
 import { PurchaseOrderMath } from './purchase-order-math';
 
@@ -173,7 +173,7 @@ export class PurchaseOrderRules {
    */
   public static validateGoodsReceipt(
     po: PurchaseOrder,
-    receiptLines: GoodsReceiptLineInput[],
+    receiptLines: POGoodsReceiptLineInput[],
     settings?: PurchaseOrderSettings | null,
     hasManagerApproval = false
   ): void {

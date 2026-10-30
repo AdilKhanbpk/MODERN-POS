@@ -261,5 +261,16 @@ exports.IPC_CHANNELS = {
     PO_CLOSE: 'po:close',
     PO_SEARCH: 'po:search',
     PO_GET_OUTSTANDING_REPORT: 'po:get-outstanding-report',
-    PO_GET_LAST_PRICE: 'po:get-last-price'
+    PO_GET_LAST_PRICE: 'po:get-last-price',
+    // Goods Receiving Notes (GRN - Prompt 22)
+    GRN_GET_SETTINGS: 'grn:get-settings',
+    GRN_CONFIGURE_SETTINGS: 'grn:configure-settings',
+    GRN_CREATE: 'grn:create',
+    GRN_GET_BY_ID: 'grn:get-by-id',
+    GRN_INSPECT: 'grn:inspect',
+    GRN_APPROVE: 'grn:approve',
+    GRN_POST: 'grn:post',
+    GRN_CANCEL: 'grn:cancel',
+    GRN_SEARCH: 'grn:search',
+    GRN_GET_DISCREPANCY_REPORT: 'grn:get-discrepancy-report'
 };

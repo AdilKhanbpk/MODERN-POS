@@ -32,6 +32,7 @@ const StockReplenishmentService_1 = require("../../../src/application/services/S
 const BatchExpiryService_1 = require("../../../src/application/services/BatchExpiryService");
 const SerialTrackingService_1 = require("../../../src/application/services/SerialTrackingService");
 const PurchaseOrderService_1 = require("../../../src/application/services/PurchaseOrderService");
+const GoodsReceiptService_1 = require("../../../src/application/services/GoodsReceiptService");
 const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
@@ -69,6 +70,7 @@ function registerIpcHandlers() {
     const batchExpiryService = new BatchExpiryService_1.BatchExpiryService((0, connection_1.getDatabase)());
     const serialTrackingService = new SerialTrackingService_1.SerialTrackingService((0, connection_1.getDatabase)());
     const purchaseOrderService = new PurchaseOrderService_1.PurchaseOrderService((0, connection_1.getDatabase)());
+    const goodsReceiptService = new GoodsReceiptService_1.GoodsReceiptService((0, connection_1.getDatabase)());
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -899,5 +901,36 @@ function registerIpcHandlers() {
     });
     handle(ipc_channels_1.IPC_CHANNELS.PO_GET_LAST_PRICE, (payload) => {
         return purchaseOrderService.getLastPurchasePrice(payload.businessId, payload.supplierId, payload.productId);
+    });
+    // --- Goods Receiving Notes Handlers (Prompt 22) ---
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_GET_SETTINGS, (payload) => {
+        return goodsReceiptService.getSettings(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_CONFIGURE_SETTINGS, (payload) => {
+        return goodsReceiptService.configureSettings(payload.businessId, payload.settings);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_CREATE, (payload) => {
+        return goodsReceiptService.createReceipt(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_GET_BY_ID, (payload) => {
+        return goodsReceiptService.findById(payload.id, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_INSPECT, (payload) => {
+        return goodsReceiptService.inspectReceipt(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_APPROVE, (payload) => {
+        return goodsReceiptService.approveReceipt(payload.receiptId, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_POST, (payload) => {
+        return goodsReceiptService.postReceipt(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_CANCEL, (payload) => {
+        return goodsReceiptService.cancelReceipt(payload.receiptId, payload.reason, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_SEARCH, (payload) => {
+        return goodsReceiptService.search(payload.query);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, (payload) => {
+        return goodsReceiptService.getDiscrepancyReport(payload.businessId, payload.purchaseOrderId);
     });
 }

@@ -323,6 +323,19 @@ exports.posApi = {
         search: (query) => invoke(ipc_channels_1.IPC_CHANNELS.PO_SEARCH, { query }),
         getOutstandingReport: (businessId, supplierId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, { businessId, supplierId }),
         getLastPurchasePrice: (businessId, supplierId, productId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_LAST_PRICE, { businessId, supplierId, productId })
+    },
+    // Goods Receiving Notes (Prompt 22)
+    goodsReceipts: {
+        getSettings: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_GET_SETTINGS, { businessId }),
+        configureSettings: (businessId, settings) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_CONFIGURE_SETTINGS, { businessId, settings }),
+        createReceipt: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_CREATE, { input, actor }),
+        getById: (id, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_GET_BY_ID, { id, businessId }),
+        inspectReceipt: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_INSPECT, { input, actor }),
+        approveReceipt: (receiptId, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_APPROVE, { receiptId, actor }),
+        postReceipt: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_POST, { input, actor }),
+        cancelReceipt: (receiptId, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_CANCEL, { receiptId, reason, actor }),
+        search: (query) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_SEARCH, { query }),
+        getDiscrepancyReport: (businessId, purchaseOrderId) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, { businessId, purchaseOrderId })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);
