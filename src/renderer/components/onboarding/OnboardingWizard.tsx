@@ -321,9 +321,9 @@ export const OnboardingWizard: React.FC<Props> = ({ onComplete }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
+    <div className="onboarding-shell h-full min-h-0 overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Header Bar */}
-      <header className="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur px-6 py-4">
+      <header className="shrink-0 border-b border-slate-800/80 bg-slate-900/90 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <span className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white text-sm shadow shadow-indigo-500/20">
@@ -396,7 +396,7 @@ export const OnboardingWizard: React.FC<Props> = ({ onComplete }) => {
       </header>
 
       {/* Main Form Body */}
-      <main className="flex-1 overflow-y-auto px-6 py-8">
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 py-8">
         <div className="max-w-5xl mx-auto">
           {currentStep === 1 && (
             <Step1Welcome
@@ -487,7 +487,7 @@ export const OnboardingWizard: React.FC<Props> = ({ onComplete }) => {
 
       {/* Persistent Bottom Action Bar (Steps 2-9) */}
       {currentStep > 1 && currentStep < 10 && (
-        <footer className="border-t border-slate-800/80 bg-slate-900/80 backdrop-blur px-6 py-4">
+        <footer className="shrink-0 border-t border-slate-800/80 bg-slate-900 px-6 py-4">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <button
               type="button"
@@ -520,4 +520,3 @@ export const OnboardingWizard: React.FC<Props> = ({ onComplete }) => {
     </div>
   );
 };
-

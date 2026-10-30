@@ -33,6 +33,7 @@ const BatchExpiryService_1 = require("../../../src/application/services/BatchExp
 const SerialTrackingService_1 = require("../../../src/application/services/SerialTrackingService");
 const PurchaseOrderService_1 = require("../../../src/application/services/PurchaseOrderService");
 const GoodsReceiptService_1 = require("../../../src/application/services/GoodsReceiptService");
+const PurchaseInvoiceService_1 = require("../../../src/application/services/PurchaseInvoiceService");
 const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
@@ -71,6 +72,7 @@ function registerIpcHandlers() {
     const serialTrackingService = new SerialTrackingService_1.SerialTrackingService((0, connection_1.getDatabase)());
     const purchaseOrderService = new PurchaseOrderService_1.PurchaseOrderService((0, connection_1.getDatabase)());
     const goodsReceiptService = new GoodsReceiptService_1.GoodsReceiptService((0, connection_1.getDatabase)());
+    const purchaseInvoiceService = new PurchaseInvoiceService_1.PurchaseInvoiceService((0, connection_1.getDatabase)());
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -932,5 +934,49 @@ function registerIpcHandlers() {
     });
     handle(ipc_channels_1.IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, (payload) => {
         return goodsReceiptService.getDiscrepancyReport(payload.businessId, payload.purchaseOrderId);
+    });
+    // --- Purchase Invoices Handlers (Prompt 23) ---
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_SETTINGS, (payload) => {
+        return purchaseInvoiceService.getSettings(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CONFIGURE_SETTINGS, (payload) => {
+        return purchaseInvoiceService.configureSettings(payload.businessId, payload.settings);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CREATE, (payload) => {
+        return purchaseInvoiceService.createInvoice(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_UPDATE, (payload) => {
+        return purchaseInvoiceService.updateInvoice(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_BY_ID, (payload) => {
+        return purchaseInvoiceService.findById(payload.id, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_LIST, (payload) => {
+        return purchaseInvoiceService.listInvoices(payload.filter);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_POST, (payload) => {
+        return purchaseInvoiceService.postInvoice(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_VOID, (payload) => {
+        return purchaseInvoiceService.voidInvoice(payload.invoiceId, payload.reason, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_ALLOCATE_PAYMENT, (payload) => {
+        return purchaseInvoiceService.allocatePayment(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_MATCH_3WAY, (payload) => {
+        return purchaseInvoiceService.performThreeWayMatch(payload.purchaseInvoiceId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_IMPORT_GRNS, (payload) => {
+        return purchaseInvoiceService.importFromGoodsReceipts(payload.receiptIds, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_PERIODS, (payload) => {
+        return purchaseInvoiceService.getAccountingPeriods(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CREATE_PERIOD, (payload) => {
+        return purchaseInvoiceService.createAccountingPeriod(payload.period);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CLOSE_PERIOD, (payload) => {
+        purchaseInvoiceService.closeAccountingPeriod(payload.periodId, payload.closedBy);
+        return true;
     });
 }

@@ -31,6 +31,7 @@ const _021_batch_and_expiry_management_1 = require("./021_batch_and_expiry_manag
 const _022_serial_number_tracking_1 = require("./022_serial_number_tracking");
 const _023_purchase_orders_workflow_1 = require("./023_purchase_orders_workflow");
 const _024_goods_receiving_notes_1 = require("./024_goods_receiving_notes");
+const _025_supplier_purchase_invoices_1 = require("./025_supplier_purchase_invoices");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -114,6 +115,9 @@ function runMigrations(db) {
     }
     if (currentVersion < 24) {
         (0, _024_goods_receiving_notes_1.applyMigrationV24)(db);
+    }
+    if (currentVersion < 25) {
+        (0, _025_supplier_purchase_invoices_1.applyMigrationV25)(db);
     }
 }
 function applyMigrationV1(db) {

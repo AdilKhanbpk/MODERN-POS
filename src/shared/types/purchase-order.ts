@@ -156,7 +156,7 @@ export interface ReceiveGoodsInput {
   notes?: string;
 }
 
-export interface PurchaseInvoiceLineInput {
+export interface POInvoiceLineInput {
   purchaseOrderLineId: string;
   invoicedQuantityScaled: number;
   invoicedUnitPriceMinor?: number;
@@ -168,7 +168,7 @@ export interface RecordPurchaseInvoiceInput {
   invoiceNumber: string;
   invoiceDate?: string;
   dueDate?: string;
-  lines: PurchaseInvoiceLineInput[];
+  lines: POInvoiceLineInput[];
   notes?: string;
 }
 

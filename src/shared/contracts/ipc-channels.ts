@@ -298,7 +298,23 @@ export const IPC_CHANNELS = {
   GRN_POST: 'grn:post',
   GRN_CANCEL: 'grn:cancel',
   GRN_SEARCH: 'grn:search',
-  GRN_GET_DISCREPANCY_REPORT: 'grn:get-discrepancy-report'
+  GRN_GET_DISCREPANCY_REPORT: 'grn:get-discrepancy-report',
+
+  // Supplier Purchase Invoices (Prompt 23)
+  PURCHASE_INVOICE_GET_SETTINGS: 'purchase-invoice:get-settings',
+  PURCHASE_INVOICE_CONFIGURE_SETTINGS: 'purchase-invoice:configure-settings',
+  PURCHASE_INVOICE_CREATE: 'purchase-invoice:create',
+  PURCHASE_INVOICE_UPDATE: 'purchase-invoice:update',
+  PURCHASE_INVOICE_GET_BY_ID: 'purchase-invoice:get-by-id',
+  PURCHASE_INVOICE_LIST: 'purchase-invoice:list',
+  PURCHASE_INVOICE_POST: 'purchase-invoice:post',
+  PURCHASE_INVOICE_VOID: 'purchase-invoice:void',
+  PURCHASE_INVOICE_ALLOCATE_PAYMENT: 'purchase-invoice:allocate-payment',
+  PURCHASE_INVOICE_MATCH_3WAY: 'purchase-invoice:match-3way',
+  PURCHASE_INVOICE_IMPORT_GRNS: 'purchase-invoice:import-grns',
+  PURCHASE_INVOICE_GET_PERIODS: 'purchase-invoice:get-periods',
+  PURCHASE_INVOICE_CREATE_PERIOD: 'purchase-invoice:create-period',
+  PURCHASE_INVOICE_CLOSE_PERIOD: 'purchase-invoice:close-period'
 };
 
 export interface ApiResponse<T = any> {

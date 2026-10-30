@@ -28,7 +28,7 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
       name: string;
     }>;
 
-    expect(migrations.map(m => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
+    expect(migrations.map(m => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
 
     // 3. Verify key core tables exist
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
@@ -55,6 +55,11 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
     expect(tableNames).toContain('goods_receipt_lines');
     expect(tableNames).toContain('goods_receipt_serials');
     expect(tableNames).toContain('goods_receipt_settings');
+    expect(tableNames).toContain('purchase_invoices');
+    expect(tableNames).toContain('purchase_invoice_lines');
+    expect(tableNames).toContain('purchase_invoice_receipt_allocations');
+    expect(tableNames).toContain('purchase_invoice_settings');
+    expect(tableNames).toContain('accounting_periods');
     expect(tableNames).toContain('stock_transfers');
     expect(tableNames).toContain('stock_transfer_lines');
     expect(tableNames).toContain('stock_transfer_receipts');
@@ -144,9 +149,9 @@ describe('Integration: Database Migrations (Fresh & Upgrade) & Universal Busines
     // Step 2: Execute migration runner to upgrade this V1 database to V2, V3, V4, V5, V6 and V7
     runMigrations(db);
 
-    // Step 3: Verify migration version was upgraded to 24
+    // Step 3: Verify migration version was upgraded to 25
     const maxVer = db.prepare('SELECT MAX(version) as ver FROM schema_migrations').get() as { ver: number };
-    expect(maxVer.ver).toBe(24);
+    expect(maxVer.ver).toBe(25);
 
     // Step 4: Verify existing V1 data was preserved with 100% integrity
     const product = db.prepare('SELECT * FROM products WHERE id = 99').get() as any;

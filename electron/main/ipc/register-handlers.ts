@@ -30,6 +30,7 @@ import { BatchExpiryService } from '../../../src/application/services/BatchExpir
 import { SerialTrackingService } from '../../../src/application/services/SerialTrackingService';
 import { PurchaseOrderService } from '../../../src/application/services/PurchaseOrderService';
 import { GoodsReceiptService } from '../../../src/application/services/GoodsReceiptService';
+import { PurchaseInvoiceService } from '../../../src/application/services/PurchaseInvoiceService';
 import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
@@ -77,6 +78,7 @@ export function registerIpcHandlers(): void {
   const serialTrackingService = new SerialTrackingService(getDatabase());
   const purchaseOrderService = new PurchaseOrderService(getDatabase());
   const goodsReceiptService = new GoodsReceiptService(getDatabase());
+  const purchaseInvoiceService = new PurchaseInvoiceService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -1214,6 +1216,64 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, (payload: { businessId: string; purchaseOrderId?: string }) => {
     return goodsReceiptService.getDiscrepancyReport(payload.businessId, payload.purchaseOrderId);
+  });
+
+  // --- Purchase Invoices Handlers (Prompt 23) ---
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_GET_SETTINGS, (payload: { businessId: string }) => {
+    return purchaseInvoiceService.getSettings(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_CONFIGURE_SETTINGS, (payload: { businessId: string; settings: any }) => {
+    return purchaseInvoiceService.configureSettings(payload.businessId, payload.settings);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_CREATE, (payload: { input: any; actor: any }) => {
+    return purchaseInvoiceService.createInvoice(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_UPDATE, (payload: { input: any; actor: any }) => {
+    return purchaseInvoiceService.updateInvoice(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_GET_BY_ID, (payload: { id: string; businessId?: string }) => {
+    return purchaseInvoiceService.findById(payload.id, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_LIST, (payload: { filter: any }) => {
+    return purchaseInvoiceService.listInvoices(payload.filter);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_POST, (payload: { input: any; actor: any }) => {
+    return purchaseInvoiceService.postInvoice(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_VOID, (payload: { invoiceId: string; reason: string; actor: any }) => {
+    return purchaseInvoiceService.voidInvoice(payload.invoiceId, payload.reason, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_ALLOCATE_PAYMENT, (payload: { input: any; actor: any }) => {
+    return purchaseInvoiceService.allocatePayment(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_MATCH_3WAY, (payload: { purchaseInvoiceId: string }) => {
+    return purchaseInvoiceService.performThreeWayMatch(payload.purchaseInvoiceId);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_IMPORT_GRNS, (payload: { receiptIds: string[]; businessId: string }) => {
+    return purchaseInvoiceService.importFromGoodsReceipts(payload.receiptIds, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_GET_PERIODS, (payload: { businessId: string }) => {
+    return purchaseInvoiceService.getAccountingPeriods(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_CREATE_PERIOD, (payload: { period: any }) => {
+    return purchaseInvoiceService.createAccountingPeriod(payload.period);
+  });
+
+  handle(IPC_CHANNELS.PURCHASE_INVOICE_CLOSE_PERIOD, (payload: { periodId: string; closedBy?: string }) => {
+    purchaseInvoiceService.closeAccountingPeriod(payload.periodId, payload.closedBy);
+    return true;
   });
 }
 

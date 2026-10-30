@@ -28,7 +28,7 @@ function createMainWindow() {
         minHeight: 700,
         title: 'Modern Retail POS - 100% Offline',
         webPreferences: {
-            preload: path_1.default.join(__dirname, '../../preload/index.js'),
+            preload: path_1.default.join(__dirname, '../preload/index.js'),
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: false,

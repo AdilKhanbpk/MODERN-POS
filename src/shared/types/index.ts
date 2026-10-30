@@ -16,6 +16,7 @@ export * from './supplier';
 export * from './serial-tracking';
 export * from './purchase-order';
 export * from './goods-receipt';
+export * from './purchase-invoice';
 
 // -------------------------------------------------------------
 // GROUP A: Business Settings, Security & Sequences

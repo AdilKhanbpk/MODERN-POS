@@ -612,6 +612,38 @@ export const posApi = {
       invoke(IPC_CHANNELS.GRN_SEARCH, { query }),
     getDiscrepancyReport: (businessId: string, purchaseOrderId?: string): Promise<any> =>
       invoke(IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, { businessId, purchaseOrderId })
+  },
+
+  // Supplier Purchase Invoices (Prompt 23)
+  purchaseInvoices: {
+    getSettings: (businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_GET_SETTINGS, { businessId }),
+    configureSettings: (businessId: string, settings: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_CONFIGURE_SETTINGS, { businessId, settings }),
+    createInvoice: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_CREATE, { input, actor }),
+    updateInvoice: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_UPDATE, { input, actor }),
+    getById: (id: string, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_GET_BY_ID, { id, businessId }),
+    listInvoices: (filter: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_LIST, { filter }),
+    postInvoice: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_POST, { input, actor }),
+    voidInvoice: (invoiceId: string, reason: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_VOID, { invoiceId, reason, actor }),
+    allocatePayment: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_ALLOCATE_PAYMENT, { input, actor }),
+    matchThreeWay: (purchaseInvoiceId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_MATCH_3WAY, { purchaseInvoiceId }),
+    importGrns: (receiptIds: string[], businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_IMPORT_GRNS, { receiptIds, businessId }),
+    getPeriods: (businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_GET_PERIODS, { businessId }),
+    createPeriod: (period: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_CREATE_PERIOD, { period }),
+    closePeriod: (periodId: string, closedBy?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PURCHASE_INVOICE_CLOSE_PERIOD, { periodId, closedBy })
   }
 };
 

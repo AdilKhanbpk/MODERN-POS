@@ -336,6 +336,23 @@ exports.posApi = {
         cancelReceipt: (receiptId, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_CANCEL, { receiptId, reason, actor }),
         search: (query) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_SEARCH, { query }),
         getDiscrepancyReport: (businessId, purchaseOrderId) => invoke(ipc_channels_1.IPC_CHANNELS.GRN_GET_DISCREPANCY_REPORT, { businessId, purchaseOrderId })
+    },
+    // Supplier Purchase Invoices (Prompt 23)
+    purchaseInvoices: {
+        getSettings: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_SETTINGS, { businessId }),
+        configureSettings: (businessId, settings) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CONFIGURE_SETTINGS, { businessId, settings }),
+        createInvoice: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CREATE, { input, actor }),
+        updateInvoice: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_UPDATE, { input, actor }),
+        getById: (id, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_BY_ID, { id, businessId }),
+        listInvoices: (filter) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_LIST, { filter }),
+        postInvoice: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_POST, { input, actor }),
+        voidInvoice: (invoiceId, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_VOID, { invoiceId, reason, actor }),
+        allocatePayment: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_ALLOCATE_PAYMENT, { input, actor }),
+        matchThreeWay: (purchaseInvoiceId) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_MATCH_3WAY, { purchaseInvoiceId }),
+        importGrns: (receiptIds, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_IMPORT_GRNS, { receiptIds, businessId }),
+        getPeriods: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_GET_PERIODS, { businessId }),
+        createPeriod: (period) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CREATE_PERIOD, { period }),
+        closePeriod: (periodId, closedBy) => invoke(ipc_channels_1.IPC_CHANNELS.PURCHASE_INVOICE_CLOSE_PERIOD, { periodId, closedBy })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);

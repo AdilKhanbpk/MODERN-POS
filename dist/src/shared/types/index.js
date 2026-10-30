@@ -34,6 +34,7 @@ __exportStar(require("./supplier"), exports);
 __exportStar(require("./serial-tracking"), exports);
 __exportStar(require("./purchase-order"), exports);
 __exportStar(require("./goods-receipt"), exports);
+__exportStar(require("./purchase-invoice"), exports);
 __exportStar(require("./stock-location"), exports);
 __exportStar(require("./stock-movement"), exports);
 __exportStar(require("./stock-adjustment"), exports);

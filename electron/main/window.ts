@@ -25,7 +25,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 700,
     title: 'Modern Retail POS - 100% Offline',
     webPreferences: {
-      preload: path.join(__dirname, '../../preload/index.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -58,4 +58,3 @@ export function createMainWindow(): BrowserWindow {
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
-

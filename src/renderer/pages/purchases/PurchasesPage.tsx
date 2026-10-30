@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { PurchaseOrder as LegacyPurchaseOrder, Supplier, Product } from '../../../shared/types';
-import { Truck, Plus, RefreshCw, X, PackagePlus, FileText, ShoppingBag, PackageCheck } from 'lucide-react';
+import { Truck, Plus, RefreshCw, X, PackagePlus, FileText, ShoppingBag, PackageCheck, CreditCard } from 'lucide-react';
 import { PurchaseOrdersView } from '../../components/purchase/PurchaseOrdersView';
 import { GoodsReceiptsView } from '../../components/receiving/GoodsReceiptsView';
+import { PurchaseInvoicesView } from '../../components/purchases/PurchaseInvoicesView';
 
 export const PurchasesPage: React.FC = () => {
-  const [tab, setTab] = useState<'orders' | 'grn' | 'direct'>('orders');
+  const [tab, setTab] = useState<'orders' | 'grn' | 'invoices' | 'direct'>('orders');
   const [purchases, setPurchases] = useState<LegacyPurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -117,6 +118,17 @@ export const PurchasesPage: React.FC = () => {
               <span>Goods Receipts (GRN)</span>
             </button>
             <button
+              onClick={() => setTab('invoices')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                tab === 'invoices'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Supplier Invoices</span>
+            </button>
+            <button
               onClick={() => setTab('direct')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 tab === 'direct'
@@ -158,6 +170,10 @@ export const PurchasesPage: React.FC = () => {
       ) : tab === 'grn' ? (
         <div className="flex-1 overflow-hidden mt-2">
           <GoodsReceiptsView />
+        </div>
+      ) : tab === 'invoices' ? (
+        <div className="flex-1 overflow-hidden mt-2">
+          <PurchaseInvoicesView />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto mt-4 rounded-xl border border-slate-800 bg-slate-900/60">
