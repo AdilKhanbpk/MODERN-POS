@@ -31,6 +31,7 @@ const StockReservationService_1 = require("../../../src/application/services/Sto
 const StockReplenishmentService_1 = require("../../../src/application/services/StockReplenishmentService");
 const BatchExpiryService_1 = require("../../../src/application/services/BatchExpiryService");
 const SerialTrackingService_1 = require("../../../src/application/services/SerialTrackingService");
+const PurchaseOrderService_1 = require("../../../src/application/services/PurchaseOrderService");
 const connection_1 = require("../../../src/infrastructure/sqlite/connection");
 const CustomerRepository_1 = require("../../../src/infrastructure/sqlite/repositories/CustomerRepository");
 const SupplierRepository_1 = require("../../../src/infrastructure/sqlite/repositories/SupplierRepository");
@@ -67,6 +68,7 @@ function registerIpcHandlers() {
     const stockReplenishmentService = new StockReplenishmentService_1.StockReplenishmentService((0, connection_1.getDatabase)());
     const batchExpiryService = new BatchExpiryService_1.BatchExpiryService((0, connection_1.getDatabase)());
     const serialTrackingService = new SerialTrackingService_1.SerialTrackingService((0, connection_1.getDatabase)());
+    const purchaseOrderService = new PurchaseOrderService_1.PurchaseOrderService((0, connection_1.getDatabase)());
     // Helper for safe IPC handler wrapping
     function handle(channel, fn) {
         electron_1.ipcMain.handle(channel, async (_event, payload) => {
@@ -854,5 +856,48 @@ function registerIpcHandlers() {
     });
     handle(ipc_channels_1.IPC_CHANNELS.SERIAL_GET_AUDIT, (payload) => {
         return serialTrackingService.getSerialAudit(payload.businessId, payload.serialIdentifier, payload.permissions || []);
+    });
+    // --- Purchase Orders Handlers (Prompt 21) ---
+    handle(ipc_channels_1.IPC_CHANNELS.PO_GET_SETTINGS, (payload) => {
+        return purchaseOrderService.getSettings(payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_CONFIGURE_SETTINGS, (payload) => {
+        return purchaseOrderService.configureSettings(payload.businessId, payload.settings);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_CREATE, (payload) => {
+        return purchaseOrderService.createOrder(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_GET_BY_ID, (payload) => {
+        return purchaseOrderService.findById(payload.id, payload.businessId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_SUBMIT_APPROVAL, (payload) => {
+        return purchaseOrderService.submitForApproval(payload.poId, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_APPROVE, (payload) => {
+        return purchaseOrderService.approveOrder(payload.poId, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_MARK_SENT, (payload) => {
+        return purchaseOrderService.markAsSent(payload.poId, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_RECEIVE_GOODS, (payload) => {
+        return purchaseOrderService.receiveGoods(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_RECORD_INVOICE, (payload) => {
+        return purchaseOrderService.recordPurchaseInvoice(payload.input, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_CANCEL, (payload) => {
+        return purchaseOrderService.cancelOrder(payload.poId, payload.reason, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_CLOSE, (payload) => {
+        return purchaseOrderService.closeOrder(payload.poId, payload.reason, payload.actor);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_SEARCH, (payload) => {
+        return purchaseOrderService.search(payload.query);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, (payload) => {
+        return purchaseOrderService.getOutstandingDeliveryReport(payload.businessId, payload.supplierId);
+    });
+    handle(ipc_channels_1.IPC_CHANNELS.PO_GET_LAST_PRICE, (payload) => {
+        return purchaseOrderService.getLastPurchasePrice(payload.businessId, payload.supplierId, payload.productId);
     });
 }

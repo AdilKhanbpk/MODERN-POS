@@ -180,7 +180,7 @@ class SalesService {
                 // Check if product requires batch tracking
                 let batchSettings = null;
                 try {
-                    batchSettings = db.prepare('SELECT * FROM product_batch_settings WHERE product_id = ?').get(product.id);
+                    batchSettings = db.prepare('SELECT * FROM product_batch_settings WHERE product_id = ?').get(String(product.id));
                 }
                 catch {
                     // Table may not exist in early tests
@@ -270,7 +270,7 @@ class SalesService {
                 // Check if product requires serial tracking
                 let serialSettings = null;
                 try {
-                    serialSettings = db.prepare('SELECT * FROM product_serial_settings WHERE product_id = ?').get(product.id);
+                    serialSettings = db.prepare('SELECT * FROM product_serial_settings WHERE product_id = ?').get(String(product.id));
                 }
                 catch {
                     // Table may not exist in early tests

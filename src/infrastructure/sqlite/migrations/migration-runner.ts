@@ -24,6 +24,7 @@ import { applyMigrationV19 } from './019_stock_reservations';
 import { applyMigrationV20 } from './020_stock_replenishment_and_monitoring';
 import { applyMigrationV21 } from './021_batch_and_expiry_management';
 import { applyMigrationV22 } from './022_serial_number_tracking';
+import { applyMigrationV23 } from './023_purchase_orders_workflow';
 
 export function runMigrations(db: Database.Database): void {
   // 1. Create schema_migrations table if not exists
@@ -125,6 +126,10 @@ export function runMigrations(db: Database.Database): void {
 
   if (currentVersion < 22) {
     applyMigrationV22(db);
+  }
+
+  if (currentVersion < 23) {
+    applyMigrationV23(db);
   }
 }
 

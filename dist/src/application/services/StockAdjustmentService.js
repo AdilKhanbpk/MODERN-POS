@@ -100,7 +100,7 @@ class StockAdjustmentService {
             const totalValueMinor = Math.round((differenceQtyScaled / 1000) * unitCostMinor);
             // Batch tracking bypass protection
             try {
-                const batchSettings = db.prepare('SELECT requires_batch FROM product_batch_settings WHERE product_id = ?').get(product.id);
+                const batchSettings = db.prepare('SELECT requires_batch FROM product_batch_settings WHERE product_id = ?').get(String(product.id));
                 if (batchSettings?.requires_batch && !lineInput.batchId) {
                     throw new batch_expiry_rules_1.BatchRequiredError(product.name);
                 }
@@ -111,7 +111,7 @@ class StockAdjustmentService {
             }
             // Serial tracking bypass protection
             try {
-                const serialSettings = db.prepare('SELECT serial_tracking_required FROM product_serial_settings WHERE product_id = ?').get(product.id);
+                const serialSettings = db.prepare('SELECT serial_tracking_required FROM product_serial_settings WHERE product_id = ?').get(String(product.id));
                 if (serialSettings?.serial_tracking_required && !lineInput.serialNumber && !lineInput.serialId) {
                     throw new serial_rules_1.SerialRequiredError(product.name);
                 }

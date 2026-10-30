@@ -556,6 +556,38 @@ export const posApi = {
       invoke(IPC_CHANNELS.SERIAL_SEARCH, { query, permissions }),
     getAudit: (businessId: string, serialIdentifier: string, permissions?: any[]): Promise<any> =>
       invoke(IPC_CHANNELS.SERIAL_GET_AUDIT, { businessId, serialIdentifier, permissions })
+  },
+
+  // Purchase Orders (Prompt 21)
+  purchaseOrders: {
+    getSettings: (businessId: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_GET_SETTINGS, { businessId }),
+    configureSettings: (businessId: string, settings: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_CONFIGURE_SETTINGS, { businessId, settings }),
+    createOrder: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_CREATE, { input, actor }),
+    getById: (id: string, businessId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_GET_BY_ID, { id, businessId }),
+    submitApproval: (poId: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_SUBMIT_APPROVAL, { poId, actor }),
+    approveOrder: (poId: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_APPROVE, { poId, actor }),
+    markSent: (poId: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_MARK_SENT, { poId, actor }),
+    receiveGoods: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_RECEIVE_GOODS, { input, actor }),
+    recordInvoice: (input: any, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_RECORD_INVOICE, { input, actor }),
+    cancelOrder: (poId: string, reason: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_CANCEL, { poId, reason, actor }),
+    closeOrder: (poId: string, reason: string, actor: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_CLOSE, { poId, reason, actor }),
+    search: (query: any): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_SEARCH, { query }),
+    getOutstandingReport: (businessId: string, supplierId?: string): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, { businessId, supplierId }),
+    getLastPurchasePrice: (businessId: string, supplierId: string | number, productId: string | number): Promise<any> =>
+      invoke(IPC_CHANNELS.PO_GET_LAST_PRICE, { businessId, supplierId, productId })
   }
 };
 

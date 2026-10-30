@@ -306,6 +306,23 @@ exports.posApi = {
         updateStatus: (payload) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_UPDATE_STATUS, payload),
         search: (query, permissions) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_SEARCH, { query, permissions }),
         getAudit: (businessId, serialIdentifier, permissions) => invoke(ipc_channels_1.IPC_CHANNELS.SERIAL_GET_AUDIT, { businessId, serialIdentifier, permissions })
+    },
+    // Purchase Orders (Prompt 21)
+    purchaseOrders: {
+        getSettings: (businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_SETTINGS, { businessId }),
+        configureSettings: (businessId, settings) => invoke(ipc_channels_1.IPC_CHANNELS.PO_CONFIGURE_SETTINGS, { businessId, settings }),
+        createOrder: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_CREATE, { input, actor }),
+        getById: (id, businessId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_BY_ID, { id, businessId }),
+        submitApproval: (poId, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_SUBMIT_APPROVAL, { poId, actor }),
+        approveOrder: (poId, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_APPROVE, { poId, actor }),
+        markSent: (poId, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_MARK_SENT, { poId, actor }),
+        receiveGoods: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_RECEIVE_GOODS, { input, actor }),
+        recordInvoice: (input, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_RECORD_INVOICE, { input, actor }),
+        cancelOrder: (poId, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_CANCEL, { poId, reason, actor }),
+        closeOrder: (poId, reason, actor) => invoke(ipc_channels_1.IPC_CHANNELS.PO_CLOSE, { poId, reason, actor }),
+        search: (query) => invoke(ipc_channels_1.IPC_CHANNELS.PO_SEARCH, { query }),
+        getOutstandingReport: (businessId, supplierId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, { businessId, supplierId }),
+        getLastPurchasePrice: (businessId, supplierId, productId) => invoke(ipc_channels_1.IPC_CHANNELS.PO_GET_LAST_PRICE, { businessId, supplierId, productId })
     }
 };
 electron_1.contextBridge.exposeInMainWorld('posApi', exports.posApi);

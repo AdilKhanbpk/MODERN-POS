@@ -28,6 +28,7 @@ import { StockReservationService } from '../../../src/application/services/Stock
 import { StockReplenishmentService } from '../../../src/application/services/StockReplenishmentService';
 import { BatchExpiryService } from '../../../src/application/services/BatchExpiryService';
 import { SerialTrackingService } from '../../../src/application/services/SerialTrackingService';
+import { PurchaseOrderService } from '../../../src/application/services/PurchaseOrderService';
 import { getDatabase } from '../../../src/infrastructure/sqlite/connection';
 import { CustomerRepository } from '../../../src/infrastructure/sqlite/repositories/CustomerRepository';
 import { SupplierRepository } from '../../../src/infrastructure/sqlite/repositories/SupplierRepository';
@@ -73,6 +74,7 @@ export function registerIpcHandlers(): void {
   const stockReplenishmentService = new StockReplenishmentService(getDatabase());
   const batchExpiryService = new BatchExpiryService(getDatabase());
   const serialTrackingService = new SerialTrackingService(getDatabase());
+  const purchaseOrderService = new PurchaseOrderService(getDatabase());
 
   // Helper for safe IPC handler wrapping
   function handle<T, R>(channel: string, fn: (payload: T) => Promise<R> | R) {
@@ -1112,6 +1114,63 @@ export function registerIpcHandlers(): void {
 
   handle(IPC_CHANNELS.SERIAL_GET_AUDIT, (payload: { businessId: string; serialIdentifier: string; permissions?: any[] }) => {
     return serialTrackingService.getSerialAudit(payload.businessId, payload.serialIdentifier, payload.permissions || []);
+  });
+
+  // --- Purchase Orders Handlers (Prompt 21) ---
+  handle(IPC_CHANNELS.PO_GET_SETTINGS, (payload: { businessId: string }) => {
+    return purchaseOrderService.getSettings(payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PO_CONFIGURE_SETTINGS, (payload: { businessId: string; settings: any }) => {
+    return purchaseOrderService.configureSettings(payload.businessId, payload.settings);
+  });
+
+  handle(IPC_CHANNELS.PO_CREATE, (payload: { input: any; actor: any }) => {
+    return purchaseOrderService.createOrder(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_GET_BY_ID, (payload: { id: string; businessId?: string }) => {
+    return purchaseOrderService.findById(payload.id, payload.businessId);
+  });
+
+  handle(IPC_CHANNELS.PO_SUBMIT_APPROVAL, (payload: { poId: string; actor: any }) => {
+    return purchaseOrderService.submitForApproval(payload.poId, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_APPROVE, (payload: { poId: string; actor: any }) => {
+    return purchaseOrderService.approveOrder(payload.poId, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_MARK_SENT, (payload: { poId: string; actor: any }) => {
+    return purchaseOrderService.markAsSent(payload.poId, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_RECEIVE_GOODS, (payload: { input: any; actor: any }) => {
+    return purchaseOrderService.receiveGoods(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_RECORD_INVOICE, (payload: { input: any; actor: any }) => {
+    return purchaseOrderService.recordPurchaseInvoice(payload.input, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_CANCEL, (payload: { poId: string; reason: string; actor: any }) => {
+    return purchaseOrderService.cancelOrder(payload.poId, payload.reason, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_CLOSE, (payload: { poId: string; reason: string; actor: any }) => {
+    return purchaseOrderService.closeOrder(payload.poId, payload.reason, payload.actor);
+  });
+
+  handle(IPC_CHANNELS.PO_SEARCH, (payload: { query: any }) => {
+    return purchaseOrderService.search(payload.query);
+  });
+
+  handle(IPC_CHANNELS.PO_GET_OUTSTANDING_REPORT, (payload: { businessId: string; supplierId?: string }) => {
+    return purchaseOrderService.getOutstandingDeliveryReport(payload.businessId, payload.supplierId);
+  });
+
+  handle(IPC_CHANNELS.PO_GET_LAST_PRICE, (payload: { businessId: string; supplierId: string | number; productId: string | number }) => {
+    return purchaseOrderService.getLastPurchasePrice(payload.businessId, payload.supplierId, payload.productId);
   });
 }
 

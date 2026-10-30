@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { PurchaseOrder, Supplier, Product } from '../../../shared/types';
-import { Truck, Plus, RefreshCw, X, PackagePlus } from 'lucide-react';
+import { PurchaseOrder as LegacyPurchaseOrder, Supplier, Product } from '../../../shared/types';
+import { Truck, Plus, RefreshCw, X, PackagePlus, FileText, ShoppingBag } from 'lucide-react';
+import { PurchaseOrdersView } from '../../components/purchase/PurchaseOrdersView';
 
 export const PurchasesPage: React.FC = () => {
-  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [tab, setTab] = useState<'orders' | 'direct'>('orders');
+  const [purchases, setPurchases] = useState<LegacyPurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,71 +87,106 @@ export const PurchasesPage: React.FC = () => {
     <div className="flex-1 p-6 flex flex-col overflow-hidden">
       <div className="flex items-center justify-between pb-4 border-b border-slate-800">
         <div>
-          <h1 className="text-xl font-bold text-white">Purchase Orders & Receiving</h1>
-          <p className="text-xs text-slate-400">Manage supplier bills, stock intake, and landed freight costs</p>
+          <h1 className="text-xl font-bold text-white">Procurement & Purchases</h1>
+          <p className="text-xs text-slate-400">Inbound purchase orders, multi-step approvals, goods receiving, and supplier billing</p>
         </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setInvoiceNumber(`PO-${Date.now().toString().slice(-6)}`);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition"
-          >
-            <Plus className="w-4 h-4" /> Receive Purchase
-          </button>
-          <button
-            onClick={loadData}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setTab('orders')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                tab === 'orders'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Purchase Orders</span>
+            </button>
+            <button
+              onClick={() => setTab('direct')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                tab === 'direct'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PackagePlus className="w-3.5 h-3.5" />
+              <span>Direct Bill Receiving</span>
+            </button>
+          </div>
+
+          {tab === 'direct' && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setInvoiceNumber(`PO-${Date.now().toString().slice(-6)}`);
+                  setIsModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition"
+              >
+                <Plus className="w-4 h-4" /> Receive Purchase
+              </button>
+              <button
+                onClick={loadData}
+                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto mt-4 rounded-xl border border-slate-800 bg-slate-900/60">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800 sticky top-0">
-            <tr>
-              <th className="p-3">PO / Bill #</th>
-              <th className="p-3">Supplier</th>
-              <th className="p-3 text-right">Subtotal</th>
-              <th className="p-3 text-right">Freight / Landed</th>
-              <th className="p-3 text-right">Grand Total</th>
-              <th className="p-3 text-right">Amount Paid</th>
-              <th className="p-3 text-center">Status</th>
-              <th className="p-3">Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/60">
-            {purchases.length === 0 ? (
+      {tab === 'orders' ? (
+        <div className="flex-1 overflow-hidden mt-2">
+          <PurchaseOrdersView />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto mt-4 rounded-xl border border-slate-800 bg-slate-900/60">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800 sticky top-0">
               <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-500">
-                  No purchases recorded. Click "Receive Purchase" to add your first supplier bill.
-                </td>
+                <th className="p-3">PO / Bill #</th>
+                <th className="p-3">Supplier</th>
+                <th className="p-3 text-right">Subtotal</th>
+                <th className="p-3 text-right">Freight / Landed</th>
+                <th className="p-3 text-right">Grand Total</th>
+                <th className="p-3 text-right">Amount Paid</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3">Date</th>
               </tr>
-            ) : (
-              purchases.map((po) => (
-                <tr key={po.id} className="hover:bg-slate-800/40 transition">
-                  <td className="p-3 font-mono font-bold text-white">{po.invoiceNumber}</td>
-                  <td className="p-3 text-slate-300">{po.supplierName || 'General Supplier'}</td>
-                  <td className="p-3 text-right font-mono text-slate-400">{formatCents(po.subtotal)}</td>
-                  <td className="p-3 text-right font-mono text-slate-400">{formatCents(po.additionalCost)}</td>
-                  <td className="p-3 text-right font-mono font-bold text-emerald-400">{formatCents(po.grandTotal)}</td>
-                  <td className="p-3 text-right font-mono text-slate-300">{formatCents(po.amountPaid)}</td>
-                  <td className="p-3 text-center">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                      {po.status}
-                    </span>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {purchases.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                    No purchases recorded. Click "Receive Purchase" to add your first supplier bill.
                   </td>
-                  <td className="p-3 text-slate-400 font-mono text-[11px]">{new Date(po.createdAt).toLocaleDateString()}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                purchases.map((po) => (
+                  <tr key={po.id} className="hover:bg-slate-800/40 transition">
+                    <td className="p-3 font-mono font-bold text-white">{po.invoiceNumber}</td>
+                    <td className="p-3 text-slate-300">{po.supplierName || 'General Supplier'}</td>
+                    <td className="p-3 text-right font-mono text-slate-400">{formatCents(po.subtotal)}</td>
+                    <td className="p-3 text-right font-mono text-slate-400">{formatCents(po.additionalCost)}</td>
+                    <td className="p-3 text-right font-mono font-bold text-emerald-400">{formatCents(po.grandTotal)}</td>
+                    <td className="p-3 text-right font-mono text-slate-300">{formatCents(po.amountPaid)}</td>
+                    <td className="p-3 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        {po.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-slate-400 font-mono text-[11px]">{new Date(po.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Receive Purchase Modal */}
       {isModalOpen && (

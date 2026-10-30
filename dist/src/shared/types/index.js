@@ -32,6 +32,7 @@ __exportStar(require("./barcode"), exports);
 __exportStar(require("./customer"), exports);
 __exportStar(require("./supplier"), exports);
 __exportStar(require("./serial-tracking"), exports);
+__exportStar(require("./purchase-order"), exports);
 __exportStar(require("./stock-location"), exports);
 __exportStar(require("./stock-movement"), exports);
 __exportStar(require("./stock-adjustment"), exports);

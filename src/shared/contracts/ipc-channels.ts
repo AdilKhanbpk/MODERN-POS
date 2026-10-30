@@ -270,7 +270,23 @@ export const IPC_CHANNELS = {
   SERIAL_REPLACE_DEFECTIVE: 'serial:replace-defective',
   SERIAL_UPDATE_STATUS: 'serial:update-status',
   SERIAL_SEARCH: 'serial:search',
-  SERIAL_GET_AUDIT: 'serial:get-audit'
+  SERIAL_GET_AUDIT: 'serial:get-audit',
+
+  // Purchase Orders (Prompt 21)
+  PO_GET_SETTINGS: 'po:get-settings',
+  PO_CONFIGURE_SETTINGS: 'po:configure-settings',
+  PO_CREATE: 'po:create',
+  PO_GET_BY_ID: 'po:get-by-id',
+  PO_SUBMIT_APPROVAL: 'po:submit-approval',
+  PO_APPROVE: 'po:approve',
+  PO_MARK_SENT: 'po:mark-sent',
+  PO_RECEIVE_GOODS: 'po:receive-goods',
+  PO_RECORD_INVOICE: 'po:record-invoice',
+  PO_CANCEL: 'po:cancel',
+  PO_CLOSE: 'po:close',
+  PO_SEARCH: 'po:search',
+  PO_GET_OUTSTANDING_REPORT: 'po:get-outstanding-report',
+  PO_GET_LAST_PRICE: 'po:get-last-price'
 };
 
 export interface ApiResponse<T = any> {

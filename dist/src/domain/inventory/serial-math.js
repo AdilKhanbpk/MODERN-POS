@@ -89,9 +89,12 @@ function validateSerialFormat(serial, rule) {
         }
     }
     if (rule.validateImeiLuhn) {
-        const imeiRes = validateImei(trimmed);
-        if (!imeiRes.isValid) {
-            return imeiRes;
+        // Only validate serial as IMEI if it is formatted as an IMEI (15 digits or numeric)
+        if (/^\d+$/.test(trimmed) || trimmed.length === 15) {
+            const imeiRes = validateImei(trimmed);
+            if (!imeiRes.isValid) {
+                return imeiRes;
+            }
         }
     }
     return { isValid: true };

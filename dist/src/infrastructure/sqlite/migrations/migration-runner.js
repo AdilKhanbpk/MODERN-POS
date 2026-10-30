@@ -29,6 +29,7 @@ const _019_stock_reservations_1 = require("./019_stock_reservations");
 const _020_stock_replenishment_and_monitoring_1 = require("./020_stock_replenishment_and_monitoring");
 const _021_batch_and_expiry_management_1 = require("./021_batch_and_expiry_management");
 const _022_serial_number_tracking_1 = require("./022_serial_number_tracking");
+const _023_purchase_orders_workflow_1 = require("./023_purchase_orders_workflow");
 function runMigrations(db) {
     // 1. Create schema_migrations table if not exists
     db.exec(`
@@ -106,6 +107,9 @@ function runMigrations(db) {
     }
     if (currentVersion < 22) {
         (0, _022_serial_number_tracking_1.applyMigrationV22)(db);
+    }
+    if (currentVersion < 23) {
+        (0, _023_purchase_orders_workflow_1.applyMigrationV23)(db);
     }
 }
 function applyMigrationV1(db) {
